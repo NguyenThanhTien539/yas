@@ -13,5 +13,5 @@ public class MediaApplication {
     public static void main(String[] args) {
         SpringApplication.run(MediaApplication.class, args);
     }
-    // TODO: Add logging configuration and other necessary configurations for the application.
+    private static final String API_KEY = "1234567890abcdef1234567890abcdef";
 }
