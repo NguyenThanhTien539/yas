@@ -63,8 +63,7 @@ jobs:
           mvn -B verify sonar:sonar \
             -pl media -am \
             -Dsonar.organization=nguyenthanhtien539 \
-            -Dsonar.projectKey=NguyenThanhTien539_yas \
-            -Dsonar.login=${SONAR_TOKEN}
+            -Dsonar.projectKey=NguyenThanhTien539_yas
 
       # 5. Kiểm tra coverage >= 70%
       - name: Check Coverage
