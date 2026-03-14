@@ -91,8 +91,7 @@ jobs:
           mvn org.sonarsource.scanner.maven:sonar-maven-plugin:sonar \
           -pl order -am \
           -Dsonar.organization=nguyenthanhtien539 \
-          -Dsonar.projectKey=NguyenThanhTien539_yas \
-          -Dsonar.login=${SONAR_TOKEN}
+          -Dsonar.projectKey=NguyenThanhTien539_yas 
 
   # ─────────────────────────────────────────────
   # PHASE 2 – BUILD
