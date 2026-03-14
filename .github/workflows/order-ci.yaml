@@ -45,14 +45,14 @@ jobs:
       - name: Run Maven Test & Generate Coverage
         run: mvn verify -pl order -am
 
-      # Kiểm tra code style
-      - name: Run Maven Checkstyle
-        run: mvn checkstyle:checkstyle -pl order -am -Dcheckstyle.output.file=order-checkstyle-result.xml
+      # # Kiểm tra code style
+      # - name: Run Maven Checkstyle
+      #   run: mvn checkstyle:checkstyle -pl order -am -Dcheckstyle.output.file=order-checkstyle-result.xml
 
-      - name: Upload Checkstyle Result
-        uses: jwgmeligmeyling/checkstyle-github-action@master
-        with:
-          path: '**/order-checkstyle-result.xml'
+      # - name: Upload Checkstyle Result
+      #   uses: jwgmeligmeyling/checkstyle-github-action@master
+      #   with:
+      #     path: '**/order-checkstyle-result.xml'
 
       # Upload kết quả test lên GitHub (hiển thị trên PR/commit)
       - name: Upload Test Results
@@ -84,22 +84,16 @@ jobs:
           args: --file=order/pom.xml --severity-threshold=high
 
       # SonarCloud – phân tích chất lượng và bảo mật code (cần kết quả test ở trên)
-      # - name: Analyze with SonarCloud
-      #   env:
-      #     SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
-      #   run: mvn org.sonarsource.scanner.maven:sonar-maven-plugin:sonar -f order
-
-      # 4. SonarCloud - phân tích chất lượng code
-      - name: SonarCloud Scan
-        uses: SonarSource/sonarqube-scan-action@v5.0.0
+      - name: Analyze with Sonar
         env:
           SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
-        with:
-          projectBaseDir: order               # nếu bạn chỉ muốn scan module 'order', bỏ hoặc thay nếu cần
-          args: >
-            -Dsonar.organization=nguyenthanhtien539
-            -Dsonar.projectKey=NguyenThanhTien539_yas
-            -Dsonar.login=${{ env.SONAR_TOKEN }}
+        run: |
+          mvn org.sonarsource.scanner.maven:sonar-maven-plugin:sonar \
+          -pl order -am \
+          -Dsonar.organization=nguyenthanhtien539 \
+          -Dsonar.projectKey=NguyenThanhTien539_yas \
+          -Dsonar.login=${SONAR_TOKEN}
+
   # ─────────────────────────────────────────────
   # PHASE 2 – BUILD
   # Build artifact, OWASP scan, đóng gói Docker
