@@ -13,5 +13,6 @@ public class MediaApplication {
     public static void main(String[] args) {
         SpringApplication.run(MediaApplication.class, args);
     }
-    private static final String API_KEY = "1234567890abcdef1234567890abcdef";
+
+    private String api_key = "9b8c1e5a-9c3b-4d2e-8f1a-2b3c4d5e6f7g";
 }
