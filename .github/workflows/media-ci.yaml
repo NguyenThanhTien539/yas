@@ -2,8 +2,7 @@ name: media service ci
 
 on:
   push:
-    branches-ignore:
-      - "main"
+    branches: ["**"]
     paths:
       - "media/**"
       - ".github/workflows/actions/action.yaml"
@@ -17,7 +16,6 @@ on:
       - ".github/workflows/actions/action.yaml"
       - ".github/workflows/media-ci.yaml"
       - "pom.xml"
-
 
   workflow_dispatch: # Cho phép trigger thủ công từ tab Actions trên GitHub
 
@@ -54,6 +52,7 @@ jobs:
         continue-on-error: true
         env:
           SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
+
 
       # 4. SonarCloud - phân tích chất lượng code
       - name: Analyze with Sonar
