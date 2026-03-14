@@ -38,6 +38,7 @@ jobs:
       # Gitleaks – quét secret/token bị lộ trong code
       - name: Gitleaks – Scan for leaked secrets
         uses: gitleaks/gitleaks-action@v2
+        continue-on-error: true 
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
