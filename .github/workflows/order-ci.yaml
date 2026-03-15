@@ -85,15 +85,27 @@ jobs:
           name: order-jacoco-report
           path: order/target/site/jacoco
 
-      # Snyk – quét lỗ hổng trong dependencies (CVE)
+      # Snyk – quét lỗ hổng trong dependencies của order + toàn bộ dependency tree (transitive)
+      # --file=pom.xml: scan root POM để Snyk hiểu toàn bộ monorepo structure & shared dependencies
+      # --severity-threshold=high: chỉ báo CVE HIGH trở lên (giảm false positive)
       # continue-on-error: true để không block pipeline; kết quả chỉ mang tính cảnh báo
-      - name: Snyk – Scan for vulnerabilities
+      # Lý do không dùng --file=order/pom.xml: chỉ quét dependencies của order, bỏ sót
+      # vulnerabilities từ các service khác qua shared BOM hoặc parent POM.
+      - name: Snyk – Scan for vulnerabilities in entire dependency tree
         uses: snyk/actions/maven@master
         continue-on-error: true
         env:
           SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
         with:
-          args: --file=order/pom.xml --severity-threshold=high
+          args: --file=order/pom.xml --project-name=yas-order --severity-threshold=high --json-file-output=snyk-report.json
+
+      # Upload Snyk report để dễ download và review
+      - name: Upload Snyk Report
+        uses: actions/upload-artifact@v4
+        if: always() # Chạy dù Snyk pass hay fail
+        with:
+          name: snyk-report
+          path: snyk-report.json
 
       # SonarCloud – tái sử dụng compiled classes + test reports từ bước verify ở trên.
       # Lý do KHÔNG dùng "verify sonar:sonar": sẽ chạy lại toàn bộ compile+test lần 2.
