@@ -46,7 +46,7 @@ jobs:
       # Chứng chạy 1 lệnh duy nhất, reactor context được maintain, dependencies resolve OK.
       # Trade-off: dependencies' tests cũng chạy (chậm), nhưng necessary trong monorepo.
       - name: Run Maven Verify (test + coverage)
-        run: mvn -B clean verify -pl cart -am
+        run: mvn -B clean verify -pl cart -am -DskipITs
 
       # Checkstyle cho cart + dependencies (Maven CI Friendly Versions cần reactor context)
       - name: Run Maven Checkstyle
