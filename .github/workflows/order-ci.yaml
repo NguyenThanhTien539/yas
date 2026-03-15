@@ -99,11 +99,13 @@ jobs:
         env:
           SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
         run: |
-          mvn -B verify sonar:sonar \
+          mvn -B sonar:sonar \
             -pl order -am \
             -Dsonar.organization=nguyenthanhtien539 \
             -Dsonar.projectKey=NguyenThanhTien539_yas \
-            -Dsonar.login=${SONAR_TOKEN}
+            -DskipTests \
+            -Dcheckstyle.skip \
+            -Dsonar.coverage.jacoco.xmlReportPaths=target/site/jacoco/jacoco.xml
   # ─────────────────────────────────────────────
   # PHASE 2 – BUILD
   # Build artifact, OWASP scan, đóng gói Docker
