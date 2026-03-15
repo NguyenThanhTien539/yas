@@ -78,6 +78,9 @@ jobs:
           title: "Order Coverage Report"
           update-comment: true
 
+      - name: Install Snyk CLI
+        uses: snyk/actions/setup@master
+
       # Upload báo cáo coverage để tham chiếu sau (Yêu cầu 7b)
       - name: Upload Coverage Artifact
         uses: actions/upload-artifact@v4
