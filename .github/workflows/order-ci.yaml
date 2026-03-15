@@ -62,14 +62,14 @@ jobs:
           path: "order/**/*-reports/TEST*.xml"
           reporter: java-junit
 
-      # Upload coverage report lên PR; pipeline FAIL nếu coverage < 70%
+      # Upload coverage report lên PR; pipeline FAIL nếu coverage < 80%
       - name: Add Coverage Report to PR
         uses: madrapps/jacoco-report@v1.6.1
         with:
           paths: ${{ github.workspace }}/order/target/site/jacoco/jacoco.xml
           token: ${{ secrets.GITHUB_TOKEN }}
-          min-coverage-overall: 70
-          min-coverage-changed-files: 70
+          min-coverage-overall: 80
+          min-coverage-changed-files: 80
           title: "Order Coverage Report"
           update-comment: true
 
