@@ -78,6 +78,13 @@ jobs:
           title: "Order Coverage Report"
           update-comment: true
 
+      # Upload báo cáo coverage để tham chiếu sau (Yêu cầu 7b)
+      - name: Upload Coverage Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: order-jacoco-report
+          path: order/target/site/jacoco
+
       # Snyk – quét lỗ hổng trong dependencies (CVE)
       # continue-on-error: true để không block pipeline; kết quả chỉ mang tính cảnh báo
       - name: Snyk – Scan for vulnerabilities
@@ -87,12 +94,6 @@ jobs:
           SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
         with:
           args: --file=order/pom.xml --severity-threshold=high
-
-      # Upload báo cáo Snyk để tham chiếu sau (Yêu cầu 7b)
-      - name: Upload Snyk result to dashboard
-        run: snyk monitor --file=order/pom.xml
-        env:
-          SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
 
       # SonarCloud – tái sử dụng compiled classes + test reports từ bước verify ở trên.
       # Lý do KHÔNG dùng "verify sonar:sonar": sẽ chạy lại toàn bộ compile+test lần 2.
