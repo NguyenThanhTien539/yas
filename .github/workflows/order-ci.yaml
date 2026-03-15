@@ -104,27 +104,17 @@ jobs:
 
       # Snyk test - scan dependencies cho additional insights
       # Note: OWASP Dependency Check ở phase 2 cũng scan CVE, nên Snyk này là optional
+      # Snyk tự đọc SNYK_TOKEN từ env, không cần gọi snyk auth thủ công
+      # Bỏ --debug và || {} để Snyk có thể ghi snyk-report.json trước khi thoát
       - name: Snyk test
         continue-on-error: true
         env:
           SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
         run: |
-          snyk auth $SNYK_TOKEN
           snyk test --file=order/pom.xml \
             --project-name=yas-order \
             --severity-threshold=high \
-            --json-file-output=snyk-report.json \
-            --debug 2>&1 || {
-              echo "Snyk test failed or no vulnerabilities found"
-              # Không fail step, chỉ log
-            }
-
-          # Debug: kiểm tra file có được tạo không
-          if [ -f snyk-report.json ]; then
-            echo "✓ snyk-report.json created successfully"
-          else
-            echo "⚠ snyk-report.json NOT FOUND - Snyk may have failed to generate report"
-          fi
+            --json-file-output=snyk-report.json
 
       # Upload Snyk report nếu file tồn tại
       - name: Upload Snyk Report
