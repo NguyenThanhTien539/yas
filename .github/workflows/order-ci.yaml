@@ -107,13 +107,7 @@ jobs:
         continue-on-error: true
         env:
           SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
-          # Lời khuyên: Nếu step trước bạn đã dùng action cài Java, bạn không cần hardcode JAVA_HOME ở đây nữa.
-          # NODE_PATH cũng không cần thiết nếu cài global npm install -g.
         run: |
-          # 1. CẤP QUYỀN THỰC THI (Dòng bắt buộc để fix lỗi -13 EACCES)
-          chmod +x ./mvnw
-          
-          # 2. CHẠY SNYK
           snyk auth $SNYK_TOKEN
           snyk test --file=order/pom.xml \
             --project-name=yas-order \
