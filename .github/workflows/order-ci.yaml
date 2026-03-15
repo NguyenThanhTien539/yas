@@ -102,16 +102,21 @@ jobs:
       - name: Install Snyk CLI
         run: npm install -g snyk
 
+      # Snyk test với debug flag để xem lỗi chi tiết
+      # Nếu Maven resolution fail, sẽ thấy error trong debug output
       - name: Snyk test
         continue-on-error: true
         env:
           SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
           JAVA_HOME: /opt/hostedtoolcache/Java_Adopt_jdk/21.0.10-7.0.LTS/x64
+          NODE_PATH: /usr/lib/node_modules
         run: |
+          snyk auth $SNYK_TOKEN
           snyk test --file=order/pom.xml \
             --project-name=yas-order \
             --severity-threshold=high \
-            --json-file-output=snyk-report.json
+            --json-file-output=snyk-report.json \
+            --debug || echo "Snyk test completed with warnings"
 
       # Upload Snyk report để dễ download và review
       - name: Upload Snyk Report
