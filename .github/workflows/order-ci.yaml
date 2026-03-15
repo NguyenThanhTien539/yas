@@ -95,6 +95,12 @@ jobs:
         with:
           args: --file=order/pom.xml --severity-threshold=high
 
+      # Upload báo cáo Snyk để tham chiếu sau (Yêu cầu 7b)
+      - name: Upload Snyk result to dashboard
+        run: snyk monitor --file=order/pom.xml
+        env:
+          SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
+
       # SonarCloud – tái sử dụng compiled classes + test reports từ bước verify ở trên.
       # Lý do KHÔNG dùng "verify sonar:sonar": sẽ chạy lại toàn bộ compile+test lần 2.
       # -DskipTests: bỏ qua re-run test (classes đã có trong order/target/).
