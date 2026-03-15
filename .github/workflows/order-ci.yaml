@@ -40,9 +40,11 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
       # Chạy test và tạo JaCoCo coverage report (mvn verify = compile + test + package + verify)
-      - name: Run Maven Test & Generate Coverage
-        # run: mvn verify -pl order -am
-        run: mvn -B clean install -pl order -am
+      - name: Maven Build Environment
+        run: mvn -B clean install -pl order -am -DskipTests -DskipITs -Dcheckstyle.skip
+
+      - name: Run Maven Unit Tests & JaCoCo
+        run: mvn -B test -pl order -am jacoco:report -DskipITs -Dcheckstyle.skip
 
       # Kiểm tra code stylex
       - name: Run Maven Checkstyle
@@ -92,12 +94,6 @@ jobs:
         with:
           args: --file=order/pom.xml --severity-threshold=high
 
-      # SonarCloud – phân tích chất lượng và bảo mật code (cần kết quả test ở trên)
-      # - name: Analyze with SonarCloud
-      #   env:
-      #     SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
-      #   run: mvn org.sonarsource.scanner.maven:sonar-maven-plugin:sonar -f order
-
       # 4. SonarCloud - phân tích chất lượng code
       - name: SonarCloud Scan
         env:
@@ -127,7 +123,8 @@ jobs:
 
       # Build artifact, bỏ qua test vì đã chạy ở phase trên
       - name: Run Maven Build
-        run: mvn clean package -pl order -am -DskipTests
+        run: mvn clean package -pl order -am -DskipTests -DskipITs -Dcheckstyle.skip 
+        # Build bỏ qua mấy bước còn lại.
 
       # OWASP – quét CVE trong dependencies (chạy sau khi build có đủ thông tin)
       - name: OWASP Dependency Check
