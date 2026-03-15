@@ -99,18 +99,21 @@ jobs:
       #   with:
       #     args: --file=order/pom.xml --project-name=yas-order --severity-threshold=high --json-file-output=snyk-report.json
 
-      - name: Install Snyk CLI
+     - name: Install Snyk CLI
         run: npm install -g snyk
 
       # Snyk test với debug flag để xem lỗi chi tiết
-      # Nếu Maven resolution fail, sẽ thấy error trong debug output
       - name: Snyk test
         continue-on-error: true
         env:
           SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
-          JAVA_HOME: /opt/hostedtoolcache/Java_Adopt_jdk/21.0.10-7.0.LTS/x64
-          NODE_PATH: /usr/lib/node_modules
+          # Lời khuyên: Nếu step trước bạn đã dùng action cài Java, bạn không cần hardcode JAVA_HOME ở đây nữa.
+          # NODE_PATH cũng không cần thiết nếu cài global npm install -g.
         run: |
+          # 1. CẤP QUYỀN THỰC THI (Dòng bắt buộc để fix lỗi -13 EACCES)
+          chmod +x ./mvnw
+          
+          # 2. CHẠY SNYK
           snyk auth $SNYK_TOKEN
           snyk test --file=order/pom.xml \
             --project-name=yas-order \
