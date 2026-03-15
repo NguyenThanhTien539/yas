@@ -106,14 +106,15 @@ jobs:
         continue-on-error: true
         env:
           SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
+          # MAVEN_OPTS: truyền -Drevision thông qua environment variable
+          # Snyk Maven plugin chạy mvn dependency:tree để resolve dependencies
+          # Vì Maven process con không có reactor context, cần -Drevision để substitute ${revision}
+          MAVEN_OPTS: -Drevision=1.0-SNAPSHOT
         run: |
-          # 1. FIX TRIỆT ĐỂ LỖI EACCES: Tìm và cấp quyền thực thi cho TẤT CẢ file mvnw trong dự án
+          # 1. Cấp quyền thực thi cho TẤT CẢ file mvnw trong dự án
           find . -name "mvnw" -exec chmod +x {} \;
 
-          # 2. Xóa symlink (nếu bạn lỡ tạo bị kẹt lại từ các lần trước)
-          # rm -f ./mvnw (không cần thiết lắm nhưng nếu thích sạch thì dùng)
-
-          # 3. Chạy lệnh quét
+          # 2. Chạy snyk test
           snyk auth $SNYK_TOKEN
           snyk test --file=order/pom.xml \
             --project-name=yas-order \
@@ -123,12 +124,12 @@ jobs:
               echo "Snyk CLI run finished (vulnerabilities found or test warnings)."
             }
 
-          # 4. Debug check
+          # 3. Debug check
           if [ -f snyk-report.json ]; then
             echo "✓ snyk-report.json created successfully"
           else
             echo "⚠ snyk-report.json NOT FOUND - Snyk crashed during dependency resolution!"
-            exit 1 # Cố tình đánh rớt step này để bạn dễ nhận biết lỗi hệ thống
+            exit 1
           fi
 
       # Upload Snyk report
