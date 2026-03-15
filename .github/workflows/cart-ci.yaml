@@ -4,14 +4,14 @@ on:
   push:
     branches: ["**"]
     paths:
-      - "order/**"
+      - "cart/**"
       - ".github/workflows/actions/action.yaml"
       - ".github/workflows/cart-ci.yaml"
       - "pom.xml"
   pull_request:
     branches: ["main"]
     paths:
-      - "order/**"
+      - "cart/**"
       - ".github/workflows/actions/action.yaml"
       - ".github/workflows/cart-ci.yaml"
       - "pom.xml"
