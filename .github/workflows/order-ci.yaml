@@ -78,16 +78,6 @@ jobs:
           title: "Order Coverage Report"
           update-comment: true
 
-      - name: Install Snyk CLI
-        uses: snyk/actions/setup@master
-
-      # Upload báo cáo coverage để tham chiếu sau (Yêu cầu 7b)
-      - name: Upload Coverage Artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: order-jacoco-report
-          path: order/target/site/jacoco
-
       # Snyk – quét lỗ hổng trong dependencies (CVE)
       # continue-on-error: true để không block pipeline; kết quả chỉ mang tính cảnh báo
       - name: Snyk – Scan for vulnerabilities
