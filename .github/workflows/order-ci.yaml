@@ -104,6 +104,13 @@ jobs:
           # Install root POM + common-library vào ~/.m2 để Snyk resolve artifact coordinates.
           mvn install -pl common-library -am -DskipTests -q
 
+          # Thay thế ${revision} literal trong các POM đã install vào local repo.
+          # Maven's artifact descriptor reader không áp dụng system properties lên POM
+          # đọc từ ~/.m2, nên common-library's POM vẫn chứa parent version ${revision}
+          # literal → fail khi Maven cố tìm com.yas:yas:pom:${revision} trên Central.
+          find ~/.m2/repository/com/yas -name "*.pom" \
+            -exec sed -i 's/\${revision}/1.0-SNAPSHOT/g' {} \;
+
           snyk auth $SNYK_TOKEN
           snyk test --file=order/pom.xml \
             --project-name=yas-order \
