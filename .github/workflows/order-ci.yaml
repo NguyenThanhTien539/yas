@@ -90,14 +90,28 @@ jobs:
       # --severity-threshold=high: chỉ báo CVE HIGH trở lên (giảm false positive)
       # continue-on-error: true để không block pipeline; kết quả chỉ mang tính cảnh báo
       # Lý do dùng order/pom.xml: Snyk cần file POM cụ thể để resolve dependencies đúng trong monorepo
-      - name: Snyk – Scan for vulnerabilities in entire dependency tree
-        uses: snyk/actions/maven@master
+      # - name: Snyk – Scan for vulnerabilities in entire dependency tree
+      #   uses: snyk/actions/maven@master
+      #   continue-on-error: true
+      #   env:
+      #     SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
+      #     JAVA_HOME: /opt/hostedtoolcache/Java_Adopt_jdk/21.0.10-7.0.LTS/x64
+      #   with:
+      #     args: --file=order/pom.xml --project-name=yas-order --severity-threshold=high --json-file-output=snyk-report.json
+
+      - name: Install Snyk CLI
+        run: npm install -g snyk
+
+      - name: Snyk test
         continue-on-error: true
         env:
           SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
           JAVA_HOME: /opt/hostedtoolcache/Java_Adopt_jdk/21.0.10-7.0.LTS/x64
-        with:
-          args: --file=order/pom.xml --project-name=yas-order --severity-threshold=high --json-file-output=snyk-report.json
+        run: |
+          snyk test --file=order/pom.xml \
+            --project-name=yas-order \
+            --severity-threshold=high \
+            --json-file-output=snyk-report.json
 
       # Upload Snyk report để dễ download và review
       - name: Upload Snyk Report
