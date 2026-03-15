@@ -28,8 +28,8 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
+import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.data.domain.Pageable;
-import org.springframework.test.context.junit.jupiter.SpringExtension;
 
 /**
  * Partial tests for OrderService.
@@ -41,7 +41,7 @@ import org.springframework.test.context.junit.jupiter.SpringExtension;
  * findOrderVmByCheckoutId, exportCsv
  * → overall line coverage stays below 70% → pipeline FAIL at coverage gate.
  */
-@ExtendWith(SpringExtension.class)
+@ExtendWith(MockitoExtension.class)
 class OrderServiceTest {
 
     @Mock private OrderRepository orderRepository;
