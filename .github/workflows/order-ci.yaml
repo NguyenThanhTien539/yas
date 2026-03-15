@@ -96,7 +96,7 @@ jobs:
         env:
           SNYK_TOKEN: ${{ secrets.SYNK_TOKEN }}
         run: |
-          chmod +x ./mvnw
+          chmod +x ./mvn
           snyk monitor -d --file=order/pom.xml --severity-threshold=high
 
       # SonarCloud – tái sử dụng compiled classes + test reports từ bước verify ở trên.
