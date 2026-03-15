@@ -38,16 +38,9 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
-      # Maven install: compile → test → package → verify → install
-      # Dùng install thay vì verify để copy tất cả artifacts (root POM, common-library, order)
-      # vào local Maven repository (~/.m2). Điều này cần thiết vì bước Snyk phía sau spawn
-      # một subprocess mvnw riêng (không có reactor context), subprocess đó cần tìm thấy
-      # com.yas:yas:pom:1.0-SNAPSHOT và common-library trong local repo để resolve ${revision}.
-      # Nếu chỉ dùng verify, artifacts không được install → Snyk fail với
-      # "Could not find artifact com.yas:yas:pom:${revision} in central".
-      # -am (also make) bảo Maven compile và install TẤT CẢ dependencies trước, rồi install order.
-      - name: Run Maven Install (test + coverage + install to local repo)
-        run: mvn -B clean install -pl order -am -DskipITs
+      # -am (also make) bảo Maven compile và test TẤT CẢ dependencies trước, rồi verify order.
+      - name: Run Maven Verify (test + coverage)
+        run: mvn -B clean verify -pl order -am -DskipITs
 
       # Checkstyle cho order + dependencies (Maven CI Friendly Versions cần reactor context)
       - name: Run Maven Checkstyle
@@ -100,25 +93,24 @@ jobs:
         env:
           SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
         run: |
-          # 1. Cấp quyền thực thi cho TẤT CẢ file mvnw trong dự án
           find . -name "mvnw" -exec chmod +x {} \;
 
-          # 2. Chạy snyk test
-          # --maven-args="-Drevision=1.0-SNAPSHOT": truyền system property trực tiếp vào lệnh
-          # `mvn dependency:tree` mà Snyk spawn. Snyk dùng 2 tầng process (outer CLI → inner
-          # snyk-linux binary), MAVEN_OPTS env var không được kế thừa xuống inner subprocess.
-          # --maven-args là cách DUY NHẤT đảm bảo -Drevision đến đúng Maven process cần nó.
+          # Tạo .mvn/maven.config để mvnw tự inject -Drevision khi khởi động,
+          # trước khi xử lý POM. Đây là cách duy nhất bypass 2-layer process của Snyk
+          # (outer CLI → inner snyk-linux binary) mà không cần env var hay --maven-args.
+          mkdir -p .mvn
+          echo "-Drevision=1.0-SNAPSHOT" > .mvn/maven.config
+
+          # Install root POM + common-library vào ~/.m2 để Snyk resolve artifact coordinates.
+          mvn install -pl common-library -am -DskipTests -q
+
           snyk auth $SNYK_TOKEN
           snyk test --file=order/pom.xml \
             --project-name=yas-order \
             --severity-threshold=high \
             --json-file-output=snyk-report.json \
-            --maven-args="-Drevision=1.0-SNAPSHOT" \
-            --debug || {
-              echo "Snyk CLI run finished (vulnerabilities found or test warnings)."
-            }
+            --debug || true
 
-          # 3. Debug check
           if [ -f snyk-report.json ]; then
             echo "✓ snyk-report.json created successfully"
           else
