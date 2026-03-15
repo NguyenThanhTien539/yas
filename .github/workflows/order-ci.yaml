@@ -102,39 +102,42 @@ jobs:
       - name: Install Snyk CLI
         run: npm install -g snyk
 
-      # Snyk test - scan dependencies cho additional insights
-      # Note: OWASP Dependency Check ở phase 2 cũng scan CVE, Snyk ở đây cho thêm insights
       - name: Snyk test
         continue-on-error: true
         env:
           SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
         run: |
-          # Fix: Snyk Maven plugin cố gọi ./mvnw nhưng file không tồn tại
-          # Workaround: tạo symlink mvnw trỏ tới /usr/bin/mvn
-          ln -s /usr/bin/mvn ./mvnw
+          # 1. FIX TRIỆT ĐỂ LỖI EACCES: Tìm và cấp quyền thực thi cho TẤT CẢ file mvnw trong dự án
+          find . -name "mvnw" -exec chmod +x {} \;
 
+          # 2. Xóa symlink (nếu bạn lỡ tạo bị kẹt lại từ các lần trước)
+          # rm -f ./mvnw (không cần thiết lắm nhưng nếu thích sạch thì dùng)
+
+          # 3. Chạy lệnh quét
           snyk auth $SNYK_TOKEN
           snyk test --file=order/pom.xml \
             --project-name=yas-order \
             --severity-threshold=high \
             --json-file-output=snyk-report.json \
             --debug || {
-              echo "Snyk test completed (may have issues)"
+              echo "Snyk CLI run finished (vulnerabilities found or test warnings)."
             }
 
-          # Debug: kiểm tra file có được tạo không
+          # 4. Debug check
           if [ -f snyk-report.json ]; then
             echo "✓ snyk-report.json created successfully"
           else
-            echo "⚠ snyk-report.json NOT FOUND"
+            echo "⚠ snyk-report.json NOT FOUND - Snyk crashed during dependency resolution!"
+            exit 1 # Cố tình đánh rớt step này để bạn dễ nhận biết lỗi hệ thống
           fi
 
-      # Upload Snyk report nếu file tồn tại
+      # Upload Snyk report
       - name: Upload Snyk Report
         uses: actions/upload-artifact@v4
-        if: always() && hashFiles('snyk-report.json') != ''
+        # Dùng hashFiles là một trick xuất sắc để tránh lỗi upload khi file không tồn tại
+        if: always() && hashFiles('snyk-report.json') != '' 
         with:
-          name: snyk-report
+          name: order-snyk-report
           path: snyk-report.json
 
       # SonarCloud – tái sử dụng compiled classes + test reports từ bước verify ở trên.
