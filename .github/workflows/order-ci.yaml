@@ -99,8 +99,8 @@ jobs:
       #   with:
       #     args: --file=order/pom.xml --project-name=yas-order --severity-threshold=high --json-file-output=snyk-report.json
 
-     - name: Install Snyk CLI
-        run: npm install -g snyk
+      - name: Install Snyk CLI
+          run: npm install -g snyk
 
       # Snyk test với debug flag để xem lỗi chi tiết
       - name: Snyk test
