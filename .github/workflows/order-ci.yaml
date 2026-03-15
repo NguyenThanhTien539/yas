@@ -103,27 +103,30 @@ jobs:
         run: npm install -g snyk
 
       # Snyk test - scan dependencies cho additional insights
-      # Note: OWASP Dependency Check ở phase 2 cũng scan CVE, nên Snyk này là optional
+      # Note: OWASP Dependency Check ở phase 2 cũng scan CVE, Snyk ở đây cho thêm insights
       - name: Snyk test
         continue-on-error: true
         env:
           SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
         run: |
+          # Fix: Snyk Maven plugin cố gọi ./mvnw nhưng file không tồn tại
+          # Workaround: tạo symlink mvnw trỏ tới /usr/bin/mvn
+          ln -s /usr/bin/mvn ./mvnw
+
           snyk auth $SNYK_TOKEN
           snyk test --file=order/pom.xml \
             --project-name=yas-order \
             --severity-threshold=high \
             --json-file-output=snyk-report.json \
-            --debug 2>&1 || {
-              echo "Snyk test failed or no vulnerabilities found"
-              # Không fail step, chỉ log
+            --debug || {
+              echo "Snyk test completed (may have issues)"
             }
 
           # Debug: kiểm tra file có được tạo không
           if [ -f snyk-report.json ]; then
             echo "✓ snyk-report.json created successfully"
           else
-            echo "⚠ snyk-report.json NOT FOUND - Snyk may have failed to generate report"
+            echo "⚠ snyk-report.json NOT FOUND"
           fi
 
       # Upload Snyk report nếu file tồn tại
