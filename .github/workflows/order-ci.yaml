@@ -99,21 +99,21 @@ jobs:
         continue-on-error: true
         env:
           SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
-          # MAVEN_OPTS: truyền -Drevision=1.0-SNAPSHOT để Snyk subprocess resolve được ${revision}
-          # Snyk spawn mvnw dependency:tree từ thư mục order/ (không có reactor context).
-          # Maven cần system property này để substitute ${revision} trong POM trước khi tra
-          # cứu parent/dependency trong local repo.
-          MAVEN_OPTS: -Drevision=1.0-SNAPSHOT
         run: |
           # 1. Cấp quyền thực thi cho TẤT CẢ file mvnw trong dự án
           find . -name "mvnw" -exec chmod +x {} \;
 
           # 2. Chạy snyk test
+          # --maven-args="-Drevision=1.0-SNAPSHOT": truyền system property trực tiếp vào lệnh
+          # `mvn dependency:tree` mà Snyk spawn. Snyk dùng 2 tầng process (outer CLI → inner
+          # snyk-linux binary), MAVEN_OPTS env var không được kế thừa xuống inner subprocess.
+          # --maven-args là cách DUY NHẤT đảm bảo -Drevision đến đúng Maven process cần nó.
           snyk auth $SNYK_TOKEN
           snyk test --file=order/pom.xml \
             --project-name=yas-order \
             --severity-threshold=high \
             --json-file-output=snyk-report.json \
+            --maven-args="-Drevision=1.0-SNAPSHOT" \
             --debug || {
               echo "Snyk CLI run finished (vulnerabilities found or test warnings)."
             }
