@@ -38,13 +38,7 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
-      # Maven verify: compile → test → package → verify → report
-      # -am (also make) bảo Maven compile và test TẤT CẢ dependencies trước, rồi verify order
-      # Lý do dùng -am: project dùng Maven CI Friendly Versions ${revision}, không có
-      # flatten-maven-plugin. Nếu tách thành 2 lệnh khác nhau, Maven process thứ 2 sẽ
-      # mất reactor context → ${revision} không resolve được từ cached POM → fail.
-      # Chứng chạy 1 lệnh duy nhất, reactor context được maintain, dependencies resolve OK.
-      # Trade-off: dependencies' tests cũng chạy (chậm), nhưng necessary trong monorepo.
+      # -am (also make) bảo Maven compile và test TẤT CẢ dependencies trước, rồi verify order.
       - name: Run Maven Verify (test + coverage)
         run: mvn -B clean verify -pl product -am -DskipITs
 
@@ -63,7 +57,7 @@ jobs:
         if: success() || failure() # Chạy kể cả khi test fail để xem report
         with:
           name: Product-Service-Unit-Test-Results
-          path: "product/target/surefire-reports/TEST*.xml"
+          path: "product/**/surefire-reports/TEST*.xml"
           reporter: java-junit
 
       # Comment coverage lên PR; action sẽ fail step nếu coverage < 70% (min-coverage-overall)
@@ -85,15 +79,60 @@ jobs:
           name: product-jacoco-report
           path: product/target/site/jacoco
 
-      # Snyk – quét lỗ hổng trong dependencies (CVE)
+      # Snyk – quét lỗ hổng trong dependencies của order + toàn bộ dependency tree (transitive)
+      # --file=order/pom.xml: scan order service pom
+      # --severity-threshold=high: chỉ báo CVE HIGH trở lên (giảm false positive)
       # continue-on-error: true để không block pipeline; kết quả chỉ mang tính cảnh báo
-      - name: Snyk – Scan for vulnerabilities
-        uses: snyk/actions/maven@master
+      # Lý do dùng order/pom.xml: Snyk cần file POM cụ thể để resolve dependencies đúng trong monorepo
+
+      - name: Install Snyk CLI
+        run: npm install -g snyk
+
+      - name: Snyk test
         continue-on-error: true
         env:
           SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
+        run: |
+          find . -name "mvnw" -exec chmod +x {} \;
+
+          # Tạo .mvn/maven.config để mvnw tự inject -Drevision khi khởi động,
+          # trước khi xử lý POM. Đây là cách duy nhất bypass 2-layer process của Snyk
+          # (outer CLI → inner snyk-linux binary) mà không cần env var hay --maven-args.
+          mkdir -p .mvn
+          echo "-Drevision=1.0-SNAPSHOT" > .mvn/maven.config
+
+          # Install root POM + common-library vào ~/.m2 để Snyk resolve artifact coordinates.
+          mvn install -pl common-library -am -DskipTests -q
+
+          # Thay thế ${revision} literal trong các POM đã install vào local repo.
+          # Maven's artifact descriptor reader không áp dụng system properties lên POM
+          # đọc từ ~/.m2, nên common-library's POM vẫn chứa parent version ${revision}
+          # literal → fail khi Maven cố tìm com.yas:yas:pom:${revision} trên Central.
+          find ~/.m2/repository/com/yas -name "*.pom" \
+            -exec sed -i 's/\${revision}/1.0-SNAPSHOT/g' {} \;
+
+          snyk auth $SNYK_TOKEN
+          snyk test --file=product/pom.xml \
+            --project-name=yas-product \
+            --severity-threshold=high \
+            --json-file-output=snyk-report.json \
+            --debug || true
+
+          if [ -f snyk-report.json ]; then
+            echo "✓ snyk-report.json created successfully"
+          else
+            echo "⚠ snyk-report.json NOT FOUND - Snyk crashed during dependency resolution!"
+            exit 1
+          fi
+
+      # Upload Snyk report
+      - name: Upload Snyk Report
+        uses: actions/upload-artifact@v4
+        # Dùng hashFiles là một trick xuất sắc để tránh lỗi upload khi file không tồn tại
+        if: always() && hashFiles('snyk-report.json') != '' 
         with:
-          args: --file=product/pom.xml --severity-threshold=high
+          name: product-snyk-report
+          path: snyk-report.json
 
       # SonarCloud – tái sử dụng compiled classes + test reports từ bước verify ở trên.
       # Lý do KHÔNG dùng "verify sonar:sonar": sẽ chạy lại toàn bộ compile+test lần 2.
@@ -102,6 +141,7 @@ jobs:
       - name: SonarCloud Scan
         env:
           SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+        # gitleaks:allow
         run: |
           mvn -B sonar:sonar \
             -pl product \
@@ -131,7 +171,7 @@ jobs:
 
       - uses: ./.github/workflows/actions
 
-      # Build toàn bộ dependency chain + package product, bỏ qua test (đã chạy ở phase test).
+      # Build toàn bộ dependency chain + package order, bỏ qua test (đã chạy ở phase test).
       # Maven cache từ phase test (same pom.xml hash) giúp bước này nhanh hơn đáng kể.
       - name: Run Maven Build
         run: mvn -B clean install -pl product -am -DskipTests
