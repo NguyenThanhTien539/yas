@@ -38,7 +38,7 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
-      # -am (also make) bảo Maven compile và test TẤT CẢ dependencies trước, rồi verify order.
+      # -am (also make) bảo Maven compile và test TẤT CẢ dependencies trước, rồi verify inventory.
       - name: Run Maven Verify (test + coverage)
         run: mvn -B clean verify -pl inventory -am -DskipITs
 
@@ -56,7 +56,7 @@ jobs:
         uses: dorny/test-reporter@v1
         if: success() || failure() # Chạy kể cả khi test fail để xem report
         with:
-          name: Inventory-Service-Unit-Test-Results
+          name: inventory-Service-Unit-Test-Results
           path: "inventory/**/surefire-reports/TEST*.xml"
           reporter: java-junit
 
@@ -69,8 +69,63 @@ jobs:
           token: ${{ secrets.GITHUB_TOKEN }}
           min-coverage-overall: 70
           min-coverage-changed-files: 70
-          title: "Inventory Coverage Report"
+          title: "inventory Coverage Report"
           update-comment: true
+
+
+      # Coverage gate cứng: chỉ pass khi overall coverage > 70%
+      - name: Enforce Coverage (> 70%)
+        env:
+          # Truyền loại sự kiện (push hoặc pull_request) vào môi trường
+          EVENT_NAME: ${{ github.event_name }}
+        run: |
+          python3 - << 'PY'
+          import sys
+          import xml.etree.ElementTree as ET
+          import os
+
+          report_path = "inventory/target/site/jacoco/jacoco.xml"
+          try:
+            root = ET.parse(report_path).getroot()
+          except FileNotFoundError:
+            print(f"ERROR: Coverage report not found: {report_path}")
+            sys.exit(1)
+
+          # Lấy coverage tổng từ counter type="LINE"
+          line_counter = root.find("./counter[@type='LINE']")
+          if line_counter is None:
+            print("ERROR: Cannot find LINE counter in jacoco.xml")
+            sys.exit(1)
+
+          missed = int(line_counter.attrib.get("missed", "0"))
+          covered = int(line_counter.attrib.get("covered", "0"))
+          total = missed + covered
+
+          if total == 0:
+            print("ERROR: Invalid coverage data (missed + covered = 0)")
+            sys.exit(1)
+
+          coverage = (covered / total) * 100
+          threshold = 70.0
+
+          print(f"Overall line coverage: {coverage:.2f}%")
+          
+          # Lấy tên sự kiện từ biến môi trường
+          event_name = os.environ.get("EVENT_NAME", "")
+
+          if coverage <= threshold:
+            if event_name == 'pull_request':
+              # Đang mở PR gộp vào main -> Chặn đứng
+              print(f"ERROR: Coverage gate failed. Required > {threshold:.0f}%, got {coverage:.2f}%. Blocking merge!")
+              sys.exit(1)
+            else:
+              # Push lên nhánh feature -> Chỉ cảnh báo, vẫn cho pass
+              print(f"WARNING: Coverage is {coverage:.2f}% (Expected > {threshold:.0f}%). Allowing push to pass.")
+              sys.exit(0)
+
+          print(f"Coverage gate passed: {coverage:.2f}% > {threshold:.0f}%")
+          PY
+          
 
       # Upload báo cáo coverage để tham chiếu sau (Yêu cầu 7b)
       - name: Upload Coverage Artifact
@@ -119,9 +174,9 @@ jobs:
             --debug || true
 
           if [ -f snyk-report.json ]; then
-            echo "✓ snyk-report.json created successfully"
+            echo "snyk-report.json created successfully"
           else
-            echo "⚠ snyk-report.json NOT FOUND - Snyk crashed during dependency resolution!"
+            echo "snyk-report.json NOT FOUND - Snyk crashed during dependency resolution!"
             exit 1
           fi
 
@@ -129,7 +184,7 @@ jobs:
       - name: Upload Snyk Report
         uses: actions/upload-artifact@v4
         # Dùng hashFiles là một trick xuất sắc để tránh lỗi upload khi file không tồn tại
-        if: always() && hashFiles('snyk-report.json') != '' 
+        if: always() && hashFiles('snyk-report.json') != ''
         with:
           name: inventory-snyk-report
           path: snyk-report.json
@@ -170,7 +225,7 @@ jobs:
 
       - uses: ./.github/workflows/actions
 
-      # Build toàn bộ dependency chain + package order, bỏ qua test (đã chạy ở phase test).
+      # Build toàn bộ dependency chain + package inventory, bỏ qua test (đã chạy ở phase test).
       # Maven cache từ phase test (same pom.xml hash) giúp bước này nhanh hơn đáng kể.
       - name: Run Maven Build
         run: mvn -B clean install -pl inventory -am -DskipTests
