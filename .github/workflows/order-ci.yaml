@@ -23,7 +23,7 @@ jobs:
   # Chạy trên mọi push (kể cả feature branch) để developer có feedback sớm nhất.
   # ─────────────────────────────────────────────
   test:
-    name: Test
+    name: "order service ci / Test"
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
