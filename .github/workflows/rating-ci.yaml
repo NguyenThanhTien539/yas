@@ -60,6 +60,7 @@ jobs:
           path: "rating/target/surefire-reports/TEST-*.xml"
           reporter: java-junit
 
+
       # Comment coverage lên PR; action sẽ fail step nếu coverage < 70% (min-coverage-overall)
       # → ngăn merge khi coverage thấp (kết hợp với branch protection "require status checks")
       - name: Add Coverage Report to PR
