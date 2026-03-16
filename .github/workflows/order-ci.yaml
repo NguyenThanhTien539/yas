@@ -76,17 +76,33 @@ jobs:
       - name: Enforce coverage >= 70% (PR only)
         if: github.event_name == 'pull_request'
         run: |
-          sudo apt-get update
-          sudo apt-get install -y bc
+          echo "Reading coverage from JaCoCo report..."
 
-          RATE=$(grep -o 'line-rate="[^"]*"' order/target/site/jacoco/jacoco.xml | head -1 | cut -d'"' -f2)
-          PERCENT=$(awk "BEGIN {print $RATE * 100}")
+          FILE="order/target/site/jacoco/jacoco.xml"
 
+          if [ ! -f "$FILE" ]; then
+            echo "❌ jacoco.xml not found!"
+            exit 1
+          fi
+
+          LINE=$(grep '<counter type="LINE"' $FILE | head -1)
+
+          MISSED=$(echo $LINE | sed -E 's/.*missed="([0-9]+)".*/\1/')
+          COVERED=$(echo $LINE | sed -E 's/.*covered="([0-9]+)".*/\1/')
+
+          TOTAL=$((MISSED + COVERED))
+          PERCENT=$((COVERED * 100 / TOTAL))
+
+          echo "Missed lines: $MISSED"
+          echo "Covered lines: $COVERED"
+          echo "Total lines: $TOTAL"
           echo "Coverage: $PERCENT%"
 
-          if (( $(echo "$PERCENT < 70" | bc -l) )); then
-            echo "Coverage below 70% → Failing job"
+          if [ "$PERCENT" -lt 70 ]; then
+            echo "❌ Coverage below 70% → Failing job"
             exit 1
+          else
+            echo "✅ Coverage requirement satisfied"
           fi
 
       # Upload báo cáo coverage để tham chiếu sau (Yêu cầu 7b)
