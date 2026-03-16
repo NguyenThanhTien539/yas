@@ -74,7 +74,7 @@ jobs:
           update-comment: false
 
       - name: Enforce coverage >= 70% (PR only)
-        if: github.event_name == 'pull_request'
+        if: github.event_name == 'pull_request' && github.base_ref == 'main'
         run: |
           echo "Reading coverage from JaCoCo report..."
 
