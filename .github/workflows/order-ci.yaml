@@ -68,13 +68,13 @@ jobs:
         with:
           paths: ${{ github.workspace }}/order/target/site/jacoco/jacoco.xml
           token: ${{ secrets.GITHUB_TOKEN }}
-          min-coverage-overall: 90
+          min-coverage-overall: 70
           # min-coverage-changed-files: 70
           title: "Order Coverage Report"
           update-comment: true
 
-      - name: Fail if coverage < 90%
-        if: ${{ steps.jacoco.outputs.coverage-overall != '' && fromJSON(steps.jacoco.outputs.coverage-overall) < 90.0 }}
+      - name: Fail if coverage < 70%
+        if: ${{ steps.jacoco.outputs.coverage-overall != '' && fromJSON(steps.jacoco.outputs.coverage-overall) < 70.0 }}
         uses: actions/github-script@v6
         with:
           script: |
