@@ -125,6 +125,7 @@ jobs:
 
           print(f"✅ Coverage gate passed: {coverage:.2f}% > {threshold:.0f}%")
           PY
+          
 
       # Upload báo cáo coverage để tham chiếu sau (Yêu cầu 7b)
       - name: Upload Coverage Artifact
