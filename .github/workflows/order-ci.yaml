@@ -70,9 +70,24 @@ jobs:
           token: ${{ secrets.GITHUB_TOKEN }}
           min-coverage-overall: 70
           min-coverage-changed-files: 70
-          fail-below-threshold: true
           title: "Order Coverage Report"
           update-comment: false
+
+      - name: Enforce coverage >= 70% (PR only)
+        if: github.event_name == 'pull_request'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y bc
+
+          RATE=$(grep -o 'line-rate="[^"]*"' order/target/site/jacoco/jacoco.xml | head -1 | cut -d'"' -f2)
+          PERCENT=$(awk "BEGIN {print $RATE * 100}")
+
+          echo "Coverage: $PERCENT%"
+
+          if (( $(echo "$PERCENT < 70" | bc -l) )); then
+            echo "Coverage below 70% → Failing job"
+            exit 1
+          fi
 
       # Upload báo cáo coverage để tham chiếu sau (Yêu cầu 7b)
       - name: Upload Coverage Artifact
