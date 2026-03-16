@@ -50,10 +50,23 @@ jobs:
         uses: snyk/actions/setup@master
 
       - name: Snyk Security Scan
-        run: snyk test --file=media/pom.xml --severity-threshold=high
+        # continue-on-error: true để không block pipeline khi CVE được tìm thấy
+        # --json-file-output: ghi kết quả ra file để upload artifact
+        # Snyk tự dùng SNYK_TOKEN từ env, không cần gọi snyk auth thủ công
         continue-on-error: true
         env:
           SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
+        run: |
+          snyk test --file=media/pom.xml \
+            --severity-threshold=high \
+            --json-file-output=snyk-report.json
+
+      - name: Upload Snyk Report
+        uses: actions/upload-artifact@v4
+        if: always() && hashFiles('snyk-report.json') != ''
+        with:
+          name: snyk-media-report
+          path: snyk-report.json
 
       # 4. SonarCloud - phân tích chất lượng code
       - name: Analyze with Sonar
