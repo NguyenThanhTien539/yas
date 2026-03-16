@@ -51,7 +51,6 @@ jobs:
         with:
           path: "**/order-checkstyle-result.xml"
 
-
       # Upload kết quả test để hiển thị trực tiếp trên PR/commit page
       - name: Upload Test Results
         uses: dorny/test-reporter@v1
@@ -64,14 +63,16 @@ jobs:
       # Comment coverage lên PR; action sẽ fail step nếu coverage < 70% (min-coverage-overall)
       # → ngăn merge khi coverage thấp (kết hợp với branch protection "require status checks")
       - name: Add Coverage Report to PR
+        if: github.event_name == 'pull_request'
         uses: madrapps/jacoco-report@v1.6.1
         with:
           paths: ${{ github.workspace }}/order/target/site/jacoco/jacoco.xml
           token: ${{ secrets.GITHUB_TOKEN }}
           min-coverage-overall: 70
           min-coverage-changed-files: 70
+          fail-below-threshold: true
           title: "Order Coverage Report"
-          update-comment: true
+          update-comment: false
 
       # Upload báo cáo coverage để tham chiếu sau (Yêu cầu 7b)
       - name: Upload Coverage Artifact
@@ -130,7 +131,7 @@ jobs:
       - name: Upload Snyk Report
         uses: actions/upload-artifact@v4
         # Dùng hashFiles là một trick xuất sắc để tránh lỗi upload khi file không tồn tại
-        if: always() && hashFiles('snyk-report.json') != '' 
+        if: always() && hashFiles('snyk-report.json') != ''
         with:
           name: order-snyk-report
           path: snyk-report.json
