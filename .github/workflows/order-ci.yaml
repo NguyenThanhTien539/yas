@@ -63,68 +63,75 @@ jobs:
       # Comment coverage lên PR; action sẽ fail step nếu coverage < 70% (min-coverage-overall)
       # → ngăn merge khi coverage thấp (kết hợp với branch protection "require status checks")
       - name: Add Coverage Report to PR
+        id: jacoco
         uses: madrapps/jacoco-report@v1.6.1
         with:
           paths: ${{ github.workspace }}/order/target/site/jacoco/jacoco.xml
           token: ${{ secrets.GITHUB_TOKEN }}
           min-coverage-overall: 70
-          min-coverage-changed-files: 70
+          # min-coverage-changed-files: 70
           title: "Order Coverage Report"
           update-comment: true
 
+      - name: Fail if coverage < 70%
+        if: ${{ steps.jacoco.outputs.coverage-overall != '' && fromJSON(steps.jacoco.outputs.coverage-overall) < 70.0 }}
+        uses: actions/github-script@v6
+        with:
+          script: |
+            core.setFailed('Overall coverage is less than 70%')
 
       # Coverage gate cứng: chỉ pass khi overall coverage > 70%
-      - name: Enforce Coverage (> 70%)
-        env:
-          # Truyền loại sự kiện (push hoặc pull_request) vào môi trường
-          EVENT_NAME: ${{ github.event_name }}
-        run: |
-          python3 - << 'PY'
-          import sys
-          import xml.etree.ElementTree as ET
-          import os
+      # - name: Enforce Coverage (> 70%)
+      #   env:
+      #     # Truyền loại sự kiện (push hoặc pull_request) vào môi trường
+      #     EVENT_NAME: ${{ github.event_name }}
+      #   run: |
+      #     python3 - << 'PY'
+      #     import sys
+      #     import xml.etree.ElementTree as ET
+      #     import os
 
-          report_path = "order/target/site/jacoco/jacoco.xml"
-          try:
-            root = ET.parse(report_path).getroot()
-          except FileNotFoundError:
-            print(f"ERROR: Coverage report not found: {report_path}")
-            sys.exit(1)
+      #     report_path = "order/target/site/jacoco/jacoco.xml"
+      #     try:
+      #       root = ET.parse(report_path).getroot()
+      #     except FileNotFoundError:
+      #       print(f"ERROR: Coverage report not found: {report_path}")
+      #       sys.exit(1)
 
-          # Lấy coverage tổng từ counter type="LINE"
-          line_counter = root.find("./counter[@type='LINE']")
-          if line_counter is None:
-            print("ERROR: Cannot find LINE counter in jacoco.xml")
-            sys.exit(1)
+      #     # Lấy coverage tổng từ counter type="LINE"
+      #     line_counter = root.find("./counter[@type='LINE']")
+      #     if line_counter is None:
+      #       print("ERROR: Cannot find LINE counter in jacoco.xml")
+      #       sys.exit(1)
 
-          missed = int(line_counter.attrib.get("missed", "0"))
-          covered = int(line_counter.attrib.get("covered", "0"))
-          total = missed + covered
+      #     missed = int(line_counter.attrib.get("missed", "0"))
+      #     covered = int(line_counter.attrib.get("covered", "0"))
+      #     total = missed + covered
 
-          if total == 0:
-            print("ERROR: Invalid coverage data (missed + covered = 0)")
-            sys.exit(1)
+      #     if total == 0:
+      #       print("ERROR: Invalid coverage data (missed + covered = 0)")
+      #       sys.exit(1)
 
-          coverage = (covered / total) * 100
-          threshold = 90.0
+      #     coverage = (covered / total) * 100
+      #     threshold = 90.0
 
-          print(f"Overall line coverage: {coverage:.2f}%")
+      #     print(f"Overall line coverage: {coverage:.2f}%")
           
-          # Lấy tên sự kiện từ biến môi trường
-          event_name = os.environ.get("EVENT_NAME", "")
+      #     # Lấy tên sự kiện từ biến môi trường
+      #     event_name = os.environ.get("EVENT_NAME", "")
 
-          if coverage <= threshold:
-            if event_name == 'pull_request':
-              # Đang mở PR gộp vào main -> Chặn đứng
-              print(f"ERROR: Coverage gate failed. Required > {threshold:.0f}%, got {coverage:.2f}%. Blocking merge!")
-              sys.exit(1)
-            else:
-              # Push lên nhánh feature -> Chỉ cảnh báo, vẫn cho pass
-              print(f"WARNING: Coverage is {coverage:.2f}% (Expected > {threshold:.0f}%). Allowing push to pass.")
-              sys.exit(0)
+      #     if coverage <= threshold:
+      #       if event_name == 'pull_request':
+      #         # Đang mở PR gộp vào main -> Chặn đứng
+      #         print(f"ERROR: Coverage gate failed. Required > {threshold:.0f}%, got {coverage:.2f}%. Blocking merge!")
+      #         sys.exit(1)
+      #       else:
+      #         # Push lên nhánh feature -> Chỉ cảnh báo, vẫn cho pass
+      #         print(f"WARNING: Coverage is {coverage:.2f}% (Expected > {threshold:.0f}%). Allowing push to pass.")
+      #         sys.exit(0)
 
-          print(f"✅ Coverage gate passed: {coverage:.2f}% > {threshold:.0f}%")
-          PY
+      #     print(f"✅ Coverage gate passed: {coverage:.2f}% > {threshold:.0f}%")
+      #     PY
           
 
       # Upload báo cáo coverage để tham chiếu sau (Yêu cầu 7b)
