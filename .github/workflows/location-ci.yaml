@@ -116,14 +116,14 @@ jobs:
           if coverage <= threshold:
             if event_name == 'pull_request':
               # Đang mở PR gộp vào main -> Chặn đứng
-              print(f"❌ ERROR: Coverage gate failed. Required > {threshold:.0f}%, got {coverage:.2f}%. Blocking merge!")
+              print(f"ERROR: Coverage gate failed. Required > {threshold:.0f}%, got {coverage:.2f}%. Blocking merge!")
               sys.exit(1)
             else:
               # Push lên nhánh feature -> Chỉ cảnh báo, vẫn cho pass
-              print(f"⚠️ WARNING: Coverage is {coverage:.2f}% (Expected > {threshold:.0f}%). Allowing push to pass.")
+              print(f"WARNING: Coverage is {coverage:.2f}% (Expected > {threshold:.0f}%). Allowing push to pass.")
               sys.exit(0)
 
-          print(f"✅ Coverage gate passed: {coverage:.2f}% > {threshold:.0f}%")
+          print(f"Coverage gate passed: {coverage:.2f}% > {threshold:.0f}%")
           PY
           
 
@@ -174,9 +174,9 @@ jobs:
             --debug || true
 
           if [ -f snyk-report.json ]; then
-            echo "✓ snyk-report.json created successfully"
+            echo "snyk-report.json created successfully"
           else
-            echo "⚠ snyk-report.json NOT FOUND - Snyk crashed during dependency resolution!"
+            echo "snyk-report.json NOT FOUND - Snyk crashed during dependency resolution!"
             exit 1
           fi
 
