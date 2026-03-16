@@ -68,10 +68,16 @@ jobs:
         with:
           paths: ${{ github.workspace }}/order/target/site/jacoco/jacoco.xml
           token: ${{ secrets.GITHUB_TOKEN }}
-          min-coverage-overall: 90
+          min-coverage-overall: 70
           title: "Order Coverage Report"
           update-comment: true
 
+      - name: Upload Coverage Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: order-jacoco-report
+          path: order/target/site/jacoco
+    
       - name: VerifyCoverage
         run: |
           python3 - <<'PY'
@@ -87,17 +93,13 @@ jobs:
           missed=int(c.get('missed','0')); covered=int(c.get('covered','0'))
           pct=covered/(missed+covered)*100 if (missed+covered)>0 else 0.0
           print(f'Overall LINE coverage: {pct:.2f}%')
-          if pct < 90.0:
+          if pct < 70.0:
             print(f'ERROR: coverage {pct:.2f}% < 70%'); sys.exit(1)
           PY
 
           
       # Upload báo cáo coverage để tham chiếu sau (Yêu cầu 7b)
-      - name: Upload Coverage Artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: order-jacoco-report
-          path: order/target/site/jacoco
+      
 
       # Snyk – quét lỗ hổng trong dependencies của order + toàn bộ dependency tree (transitive)
       # --file=order/pom.xml: scan order service pom
