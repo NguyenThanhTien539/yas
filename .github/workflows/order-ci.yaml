@@ -123,7 +123,7 @@ jobs:
               print(f"WARNING: Coverage is {coverage:.2f}% (Expected > {threshold:.0f}%). Allowing push to pass.")
               sys.exit(0)
 
-          print(f"✅ Coverage gate passed: {coverage:.2f}% > {threshold:.0f}%")
+          print(f"Coverage gate passed: {coverage:.2f}% > {threshold:.0f}%")
           PY
           
 
@@ -174,9 +174,9 @@ jobs:
             --debug || true
 
           if [ -f snyk-report.json ]; then
-            echo "✓ snyk-report.json created successfully"
+            echo "snyk-report.json created successfully"
           else
-            echo "⚠ snyk-report.json NOT FOUND - Snyk crashed during dependency resolution!"
+            echo "snyk-report.json NOT FOUND - Snyk crashed during dependency resolution!"
             exit 1
           fi
 
