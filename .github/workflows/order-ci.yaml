@@ -20,7 +20,7 @@ on:
 jobs:
   # ─────────────────────────────────────────────
   # PHASE 1 – TEST
-  # Chạy trên mọi push (kể cả feature branch) để developer có feedback sớm nhất.
+  # Runs on every push to give developers early feedback.
   # ─────────────────────────────────────────────
   test:
     name: Test
@@ -28,21 +28,21 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
-          fetch-depth: 0 # Cần cho SonarCloud (blame history) và Gitleaks (full log)
+          fetch-depth: 0 # Required for SonarCloud blame history and Gitleaks full log scan
 
       - uses: ./.github/workflows/actions # Setup JDK 21, cache Maven & Sonar
 
-      # Gitleaks – quét secret/token bị lộ trong lịch sử commit
+      # Scan for secrets leaked in commit history
       - name: Gitleaks – Scan for leaked secrets
         uses: gitleaks/gitleaks-action@v2
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
-      # -am (also make) bảo Maven compile và test TẤT CẢ dependencies trước, rồi verify order.
+      # -am builds all dependencies before verifying the order module
       - name: Run Maven Verify (test + coverage)
         run: mvn -B clean verify -pl order -am -DskipITs
 
-      # Checkstyle cho order + dependencies (Maven CI Friendly Versions cần reactor context)
+      # Checkstyle requires reactor context for CI-friendly versioning
       - name: Run Maven Checkstyle
         run: mvn checkstyle:checkstyle -pl order -am -Dcheckstyle.output.file=order-checkstyle-result.xml
 
@@ -51,17 +51,17 @@ jobs:
         with:
           path: "**/order-checkstyle-result.xml"
 
-      # Upload kết quả test để hiển thị trực tiếp trên PR/commit page
+      # Publish test results to PR/commit page
       - name: Upload Test Results
         uses: dorny/test-reporter@v1
-        if: success() || failure() # Chạy kể cả khi test fail để xem report
+        if: success() || failure() # Run even on failure to show report
         with:
           name: Order-Service-Unit-Test-Results
           path: "order/**/surefire-reports/TEST*.xml"
           reporter: java-junit
 
-      # Comment coverage lên PR; action sẽ fail step nếu coverage < 70% (min-coverage-overall)
-      # → ngăn merge khi coverage thấp (kết hợp với branch protection "require status checks")
+      # Posts coverage comment on PR; fails if overall coverage < 70%.
+      # Works with branch protection "require status checks" to block low-coverage merges.
       - name: Add Coverage Report to PR
         id: jacoco
         uses: madrapps/jacoco-report@v1.6.1
@@ -77,7 +77,7 @@ jobs:
         with:
           name: order-jacoco-report
           path: order/target/site/jacoco
-    
+
       - name: VerifyCoverage
         run: |
           set -euo pipefail
@@ -98,16 +98,9 @@ jobs:
             print(f'ERROR: coverage {pct:.2f}% < 70%'); sys.exit(1)
           PY
 
-          
-
-      
-
-      # Snyk – quét lỗ hổng trong dependencies của order + toàn bộ dependency tree (transitive)
-      # --file=order/pom.xml: scan order service pom
-      # --severity-threshold=high: chỉ báo CVE HIGH trở lên (giảm false positive)
-      # continue-on-error: true để không block pipeline; kết quả chỉ mang tính cảnh báo
-      # Lý do dùng order/pom.xml: Snyk cần file POM cụ thể để resolve dependencies đúng trong monorepo
-
+      # Scan for HIGH+ CVEs in the dependency tree.
+      # Uses order/pom.xml to resolve the correct dependency tree in this monorepo.
+      # continue-on-error: results are advisory, not blocking.
       - name: Install Snyk CLI
         run: npm install -g snyk
 
@@ -118,19 +111,17 @@ jobs:
         run: |
           find . -name "mvnw" -exec chmod +x {} \;
 
-          # Tạo .mvn/maven.config để mvnw tự inject -Drevision khi khởi động,
-          # trước khi xử lý POM. Đây là cách duy nhất bypass 2-layer process của Snyk
-          # (outer CLI → inner snyk-linux binary) mà không cần env var hay --maven-args.
+          # Inject -Drevision via .mvn/maven.config so both Maven layers (outer CLI + inner
+          # snyk-linux binary) pick it up without needing extra env vars or --maven-args.
           mkdir -p .mvn
           echo "-Drevision=1.0-SNAPSHOT" > .mvn/maven.config
 
-          # Install root POM + common-library vào ~/.m2 để Snyk resolve artifact coordinates.
+          # Install root POM + common-library so Snyk can resolve artifact coordinates.
           mvn install -pl common-library -am -DskipTests -q
 
-          # Thay thế ${revision} literal trong các POM đã install vào local repo.
-          # Maven's artifact descriptor reader không áp dụng system properties lên POM
-          # đọc từ ~/.m2, nên common-library's POM vẫn chứa parent version ${revision}
-          # literal → fail khi Maven cố tìm com.yas:yas:pom:${revision} trên Central.
+          # Replace ${revision} literals in installed POMs.
+          # Maven's artifact descriptor reader does not apply system properties to POMs
+          # read from ~/.m2, causing resolution failures on Central.
           find ~/.m2/repository/com/yas -name "*.pom" \
             -exec sed -i 's/\${revision}/1.0-SNAPSHOT/g' {} \;
 
@@ -149,15 +140,6 @@ jobs:
             exit 1
           fi
 
-      # Upload Snyk report
-      - name: Upload Snyk Report
-        uses: actions/upload-artifact@v4
-        # Dùng hashFiles là một trick xuất sắc để tránh lỗi upload khi file không tồn tại
-        if: always() && hashFiles('snyk-report.json') != ''
-        with:
-          name: order-snyk-report
-          path: snyk-report.json
-      # Upload file HTML thay vì JSON
       - name: Upload Snyk Report (HTML)
         uses: actions/upload-artifact@v4
         if: always() && hashFiles('snyk-report.html') != ''
@@ -165,10 +147,8 @@ jobs:
           name: order-snyk-report-html
           path: snyk-report.html
 
-      # SonarCloud – tái sử dụng compiled classes + test reports từ bước verify ở trên.
-      # Lý do KHÔNG dùng "verify sonar:sonar": sẽ chạy lại toàn bộ compile+test lần 2.
-      # -DskipTests: bỏ qua re-run test (classes đã có trong order/target/).
-      # Trỏ thẳng tới jacoco.xml đã tạo để Sonar có dữ liệu coverage.
+      # Reuse compiled classes and test reports from the verify step above.
+      # Avoids re-running compile+test by using sonar:sonar with -DskipTests.
       - name: SonarCloud Scan
         env:
           SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
@@ -185,14 +165,14 @@ jobs:
 
   # ─────────────────────────────────────────────
   # PHASE 2 – BUILD
-  # Chỉ chạy khi: PR vào main HOẶC push vào main.
-  # Lý do: feature branch chỉ cần test để có feedback nhanh.
-  # Build sinh artifact + OWASP scan (nặng ~10 phút) chỉ cần thiết khi sắp merge.
+  # Runs only on PR to main or push to main.
+  # Feature branches only need the test phase for fast feedback.
+  # Build + OWASP scan (~10 min) is only needed before merge.
   # ─────────────────────────────────────────────
   build:
     name: Build
     runs-on: ubuntu-latest
-    needs: test # Chỉ chạy nếu phase Test pass
+    needs: test # Runs only if test job passes
     if: github.event_name == 'pull_request' || github.ref == 'refs/heads/main'
     steps:
       - uses: actions/checkout@v4
@@ -201,12 +181,12 @@ jobs:
 
       - uses: ./.github/workflows/actions
 
-      # Build toàn bộ dependency chain + package order, bỏ qua test (đã chạy ở phase test).
-      # Maven cache từ phase test (same pom.xml hash) giúp bước này nhanh hơn đáng kể.
+      # Build full dependency chain and package order; skip tests (already run in test phase).
+      # Maven cache from the test phase speeds this up significantly.
       - name: Run Maven Build
         run: mvn -B clean install -pl order -am -DskipTests
 
-      # OWASP – quét CVE trong toàn bộ dependency tree sau khi build
+      # Scan CVEs in the full dependency tree after build
       - name: OWASP Dependency Check
         uses: dependency-check/Dependency-Check_Action@main
         env:
@@ -222,20 +202,4 @@ jobs:
           name: OWASP Dependency Check Report
           path: ${{ github.workspace }}/reports
 
-      # Docker – chỉ build và push khi có commit mới vào main (sau khi PR được merge).
-      # Điều kiện: push event (không phải PR) VÀ đang ở nhánh main.
-      # - name: Log in to Container Registry
-      #   if: github.event_name == 'push' && github.ref == 'refs/heads/main'
-      #   uses: docker/login-action@v3
-      #   with:
-      #     registry: ghcr.io
-      #     username: ${{ github.actor }}
-      #     password: ${{ secrets.GITHUB_TOKEN }}
 
-      # - name: Build and push Docker image
-      #   if: github.event_name == 'push' && github.ref == 'refs/heads/main'
-      #   uses: docker/build-push-action@v6
-      #   with:
-      #     context: ./order
-      #     push: true
-      #     tags: ghcr.io/nashtech-garage/yas-order:latest
