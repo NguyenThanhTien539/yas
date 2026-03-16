@@ -181,9 +181,9 @@ jobs:
             --debug || true
 
           if [ -f snyk-report.json ]; then
-            echo "✓ snyk-report.json created successfully"
+            echo "snyk-report.json created successfully"
           else
-            echo "⚠ snyk-report.json NOT FOUND - Snyk crashed during dependency resolution!"
+            echo "snyk-report.json NOT FOUND - Snyk crashed during dependency resolution!"
             exit 1
           fi
 
@@ -211,8 +211,8 @@ jobs:
             -Dsonar.organization=nguyenthanhtien539 \
             -Dsonar.projectKey=NguyenThanhTien539_yas \
             -Dsonar.login=${SONAR_TOKEN} \
-            -Dsonar.coverage.jacoco.xmlReportPaths=order/target/site/jacoco/jacoco.xml \
-            -Dsonar.junit.reportPaths=order/target/surefire-reports
+            -Dsonar.coverage.jacoco.xmlReportPaths=${GITHUB_WORKSPACE}/customer/target/site/jacoco/jacoco.xml \
+            -Dsonar.junit.reportPaths=${GITHUB_WORKSPACE}/customer/target/surefire-reports
 
   # ─────────────────────────────────────────────
   # PHASE 2 – BUILD
