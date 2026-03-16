@@ -159,7 +159,7 @@ jobs:
             -DskipTests \
             -Dsonar.organization=nguyenthanhtien539 \
             -Dsonar.projectKey=NguyenThanhTien539_yas \
-            -Dsonar.login=${SONAR_TOKEN} \
+            -Dsonar.token=${SONAR_TOKEN} \
             -Dsonar.coverage.jacoco.xmlReportPaths=${GITHUB_WORKSPACE}/order/target/site/jacoco/jacoco.xml \
             -Dsonar.junit.reportPaths=${GITHUB_WORKSPACE}/order/target/surefire-reports
 
