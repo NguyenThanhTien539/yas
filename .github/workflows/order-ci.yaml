@@ -92,12 +92,12 @@ jobs:
           COVERED=$(echo $LINE | sed -E 's/.*covered="([0-9]+)".*/\1/')
 
           TOTAL=$((MISSED + COVERED))
-          
+
           if [ "$TOTAL" -eq 0 ]; then
-            echo "⚠️ No lines to cover. Skipping."
+            echo "No lines to cover. Skipping."
             exit 0
           fi
-          
+
           PERCENT=$((COVERED * 100 / TOTAL))
 
           echo "Missed lines: $MISSED"
@@ -106,10 +106,10 @@ jobs:
           echo "Coverage: $PERCENT%"
 
           if [ "$PERCENT" -lt 70 ]; then
-            echo "❌ Coverage below 70% → Failing job"
+            echo "Coverage below 70% → Failing job"
             exit 1
           else
-            echo "✅ Coverage requirement satisfied"
+            echo "Coverage requirement satisfied"
           fi
 
       # Upload báo cáo coverage để tham chiếu sau (Yêu cầu 7b)
