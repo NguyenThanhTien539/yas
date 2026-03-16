@@ -69,16 +69,16 @@ jobs:
           paths: ${{ github.workspace }}/order/target/site/jacoco/jacoco.xml
           token: ${{ secrets.GITHUB_TOKEN }}
           min-coverage-overall: 70
-          # min-coverage-changed-files: 70
           title: "Order Coverage Report"
           update-comment: true
 
-      - name: Fail if coverage < 70%
-        if: ${{ steps.jacoco.outputs.coverage-overall != '' && fromJSON(steps.jacoco.outputs.coverage-overall) < 70.0 }}
-        uses: actions/github-script@v6
-        with:
-          script: |
-            core.setFailed('Overall coverage is less than 70%')
+      - name: VerifyCoverage
+        if: ${{ steps.jacoco.outputs.coverage-overall != '' }}
+        run: |
+          COVERAGE="${{ steps.jacoco.outputs.coverage-overall }}"
+          echo "Overall coverage = ${COVERAGE}%"
+          # Fail if coverage < 70.0
+          echo "${COVERAGE}" | awk -v th=70 '{ if (($1+0) < th) { print "ERROR: coverage below " th "% (was " $1 "% )"; exit 1 } }'
 
           
       # Upload báo cáo coverage để tham chiếu sau (Yêu cầu 7b)
