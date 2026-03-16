@@ -153,7 +153,7 @@ jobs:
             -exec sed -i 's/\${revision}/1.0-SNAPSHOT/g' {} \;
 
           snyk auth $SNYK_TOKEN
-          snyk monitor --file=cart/pom.xml \
+          snyk test --file=cart/pom.xml \
             --project-name=yas-cart \
             --severity-threshold=high \
             --json-file-output=snyk-report.json \
