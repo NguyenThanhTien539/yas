@@ -57,7 +57,7 @@ jobs:
         if: success() || failure() # Chạy kể cả khi test fail để xem report
         with:
           name: Media-Service-Unit-Test-Results
-          path: "media/**/surefire-reports/TEST*.xml"
+          path: "media/target/surefire-reports/TEST-*.xml"
           reporter: java-junit
 
       # Comment coverage lên PR; action sẽ fail step nếu coverage < 70% (min-coverage-overall)
