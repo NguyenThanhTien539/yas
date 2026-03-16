@@ -204,8 +204,8 @@ jobs:
             -Dsonar.organization=nguyenthanhtien539 \
             -Dsonar.projectKey=NguyenThanhTien539_yas \
             -Dsonar.login=${SONAR_TOKEN} \
-            -Dsonar.coverage.jacoco.xmlReportPaths=order/target/site/jacoco/jacoco.xml \
-            -Dsonar.junit.reportPaths=order/target/surefire-reports
+            -Dsonar.coverage.jacoco.xmlReportPaths=${GITHUB_WORKSPACE}/customer/target/site/jacoco/jacoco.xml \
+            -Dsonar.junit.reportPaths=${GITHUB_WORKSPACE}/customer/target/surefire-reports
 
   # ─────────────────────────────────────────────
   # PHASE 2 – BUILD
