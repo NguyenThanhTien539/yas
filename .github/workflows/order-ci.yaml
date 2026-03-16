@@ -72,6 +72,7 @@ jobs:
           title: "Order Coverage Report"
           update-comment: true
 
+
       # Coverage gate cứng: chỉ pass khi overall coverage > 70%
       - name: Enforce Coverage   (> 70%)
         run: |
@@ -102,7 +103,7 @@ jobs:
             sys.exit(1)
 
           coverage = (covered / total) * 100
-          threshold = 70.0
+          threshold = 95.0
 
           print(f"Overall line coverage: {coverage:.2f}%")
           if coverage <= threshold:
