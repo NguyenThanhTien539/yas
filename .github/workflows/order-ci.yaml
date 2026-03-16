@@ -94,32 +94,33 @@ jobs:
       # continue-on-error: true để không block pipeline; kết quả chỉ mang tính cảnh báo
       # Lý do dùng order/pom.xml: Snyk cần file POM cụ thể để resolve dependencies đúng trong monorepo
 
+      - name: Install Snyk CLI
+        run: npm install -g snyk
+
       - name: Snyk test
         continue-on-error: true
         env:
           SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
         run: |
-          set -euo pipefail
-          IFS=$'\n\t'
-
-          # Ensure mvnw is executable
           find . -name "mvnw" -exec chmod +x {} \;
 
-          # Provide -Drevision to mvnw via .mvn/maven.config
+          # Tạo .mvn/maven.config để mvnw tự inject -Drevision khi khởi động,
+          # trước khi xử lý POM. Đây là cách duy nhất bypass 2-layer process của Snyk
+          # (outer CLI → inner snyk-linux binary) mà không cần env var hay --maven-args.
           mkdir -p .mvn
-          printf '%s\n' '-Drevision=1.0-SNAPSHOT' > .mvn/maven.config
+          echo "-Drevision=1.0-SNAPSHOT" > .mvn/maven.config
 
-          # Install minimal artifacts needed for Snyk resolution
-          mvn -B install -pl common-library -am -DskipTests -q
+          # Install root POM + common-library vào ~/.m2 để Snyk resolve artifact coordinates.
+          mvn install -pl common-library -am -DskipTests -q
 
-          # Replace ${revision} literal in any installed POMs
-          if [ -d "$HOME/.m2/repository/com/yas" ]; then
-            find "$HOME/.m2/repository/com/yas" -name "*.pom" -print0 \
-              | xargs -0 sed -i 's/\${revision}/1.0-SNAPSHOT/g' || true
-          fi
+          # Thay thế ${revision} literal trong các POM đã install vào local repo.
+          # Maven's artifact descriptor reader không áp dụng system properties lên POM
+          # đọc từ ~/.m2, nên common-library's POM vẫn chứa parent version ${revision}
+          # literal → fail khi Maven cố tìm com.yas:yas:pom:${revision} trên Central.
+          find ~/.m2/repository/com/yas -name "*.pom" \
+            -exec sed -i 's/\${revision}/1.0-SNAPSHOT/g' {} \;
 
-          # Run Snyk (do not fail the job here; step is allowed to continue-on-error)
-          snyk auth "$SNYK_TOKEN"
+          snyk auth $SNYK_TOKEN
           snyk test --file=order/pom.xml \
             --project-name=yas-order \
             --severity-threshold=high \
@@ -127,11 +128,8 @@ jobs:
             --debug || true
 
           if [ -f snyk-report.json ]; then
-            echo "✓ snyk-report.json created successfully"
+            echo "snyk-report.json created successfully"
           else
-            echo "⚠ snyk-report.json NOT FOUND - Snyk may have failed during dependency resolution"
-            exit 1
-          fi
             echo "snyk-report.json NOT FOUND - Snyk crashed during dependency resolution!"
             exit 1
           fi
@@ -160,8 +158,8 @@ jobs:
             -Dsonar.organization=nguyenthanhtien539 \
             -Dsonar.projectKey=NguyenThanhTien539_yas \
             -Dsonar.login=${SONAR_TOKEN} \
-            -Dsonar.coverage.jacoco.xmlReportPaths=${GITHUB_WORKSPACE}/customer/target/site/jacoco/jacoco.xml \
-            -Dsonar.junit.reportPaths=${GITHUB_WORKSPACE}/customer/target/surefire-reports
+            -Dsonar.coverage.jacoco.xmlReportPaths=${GITHUB_WORKSPACE}/order/target/site/jacoco/jacoco.xml \
+            -Dsonar.junit.reportPaths=${GITHUB_WORKSPACE}/order/target/surefire-reports
 
   # ─────────────────────────────────────────────
   # PHASE 2 – BUILD
