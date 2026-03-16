@@ -80,6 +80,7 @@ jobs:
     
       - name: VerifyCoverage
         run: |
+          set -euo pipefail
           python3 - <<'PY'
           import sys,xml.etree.ElementTree as ET
           p='order/target/site/jacoco/jacoco.xml'
@@ -93,8 +94,8 @@ jobs:
           missed=int(c.get('missed','0')); covered=int(c.get('covered','0'))
           pct=covered/(missed+covered)*100 if (missed+covered)>0 else 0.0
           print(f'Overall LINE coverage: {pct:.2f}%')
-          if pct < 70.0:
-            print(f'ERROR: coverage {pct:.2f}% < 70%'); sys.exit(1)
+          if pct < 90.0:
+            print(f'ERROR: coverage {pct:.2f}% < 90%'); sys.exit(1)
           PY
 
           
