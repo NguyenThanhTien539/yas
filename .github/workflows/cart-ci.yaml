@@ -56,7 +56,7 @@ jobs:
         uses: dorny/test-reporter@v1
         if: success() || failure() # Chạy kể cả khi test fail để xem report
         with:
-          name: Cart-Service-Unit-Test-Results
+          name: cart-Service-Unit-Test-Results
           path: "cart/**/surefire-reports/TEST*.xml"
           reporter: java-junit
 
@@ -69,8 +69,49 @@ jobs:
           token: ${{ secrets.GITHUB_TOKEN }}
           min-coverage-overall: 70
           min-coverage-changed-files: 70
-          title: "Cart Coverage Report"
+          title: "cart Coverage Report"
           update-comment: true
+
+
+      # Coverage gate cứng: chỉ pass khi overall coverage > 70%
+      - name: Enforce Coverage   (> 70%)
+        run: |
+          python3 - << 'PY'
+          import sys
+          import xml.etree.ElementTree as ET
+
+          report_path = "cart/target/site/jacoco/jacoco.xml"
+          try:
+            root = ET.parse(report_path).getroot()
+          except FileNotFoundError:
+            print(f"ERROR: Coverage report not found: {report_path}")
+            sys.exit(1)
+
+          # JaCoCo XML không có thuộc tính line-rate ở root như Cobertura.
+          # Coverage tổng được lấy từ counter type="LINE" (missed, covered).
+          line_counter = root.find("./counter[@type='LINE']")
+          if line_counter is None:
+            print("ERROR: Cannot find LINE counter in jacoco.xml")
+            sys.exit(1)
+
+          missed = int(line_counter.attrib.get("missed", "0"))
+          covered = int(line_counter.attrib.get("covered", "0"))
+          total = missed + covered
+
+          if total == 0:
+            print("ERROR: Invalid coverage data (missed + covered = 0)")
+            sys.exit(1)
+
+          coverage = (covered / total) * 100
+          threshold = 95.0
+
+          print(f"Overall line coverage: {coverage:.2f}%")
+          if coverage <= threshold:
+            print(f"ERROR: Coverage gate failed. Required > {threshold:.0f}%, got {coverage:.2f}%")
+            sys.exit(1)
+
+          print(f"Coverage gate passed: {coverage:.2f}% > {threshold:.0f}%")
+          PY
 
       # Upload báo cáo coverage để tham chiếu sau (Yêu cầu 7b)
       - name: Upload Coverage Artifact
@@ -79,11 +120,11 @@ jobs:
           name: cart-jacoco-report
           path: cart/target/site/jacoco
 
-      # Snyk – quét lỗ hổng trong dependencies của order + toàn bộ dependency tree (transitive)
-      # --file=order/pom.xml: scan order service pom
+      # Snyk – quét lỗ hổng trong dependencies của cart + toàn bộ dependency tree (transitive)
+      # --file=cart/pom.xml: scan cart service pom
       # --severity-threshold=high: chỉ báo CVE HIGH trở lên (giảm false positive)
       # continue-on-error: true để không block pipeline; kết quả chỉ mang tính cảnh báo
-      # Lý do dùng order/pom.xml: Snyk cần file POM cụ thể để resolve dependencies đúng trong monorepo
+      # Lý do dùng cart/pom.xml: Snyk cần file POM cụ thể để resolve dependencies đúng trong monorepo
 
       - name: Install Snyk CLI
         run: npm install -g snyk
@@ -129,7 +170,7 @@ jobs:
       - name: Upload Snyk Report
         uses: actions/upload-artifact@v4
         # Dùng hashFiles là một trick xuất sắc để tránh lỗi upload khi file không tồn tại
-        if: always() && hashFiles('snyk-report.json') != '' 
+        if: always() && hashFiles('snyk-report.json') != ''
         with:
           name: cart-snyk-report
           path: snyk-report.json
@@ -170,7 +211,7 @@ jobs:
 
       - uses: ./.github/workflows/actions
 
-      # Build toàn bộ dependency chain + package order, bỏ qua test (đã chạy ở phase test).
+      # Build toàn bộ dependency chain + package cart, bỏ qua test (đã chạy ở phase test).
       # Maven cache từ phase test (same pom.xml hash) giúp bước này nhanh hơn đáng kể.
       - name: Run Maven Build
         run: mvn -B clean install -pl cart -am -DskipTests
