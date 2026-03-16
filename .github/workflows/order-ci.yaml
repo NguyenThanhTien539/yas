@@ -72,13 +72,24 @@ jobs:
           title: "Order Coverage Report"
           update-comment: true
 
-      - name: VerifyCoverage
-        if: ${{ steps.jacoco.outputs.coverage-overall != '' }}
+        - name: VerifyCoverage
         run: |
-          COVERAGE="${{ steps.jacoco.outputs.coverage-overall }}"
-          echo "Overall coverage = ${COVERAGE}%"
-          # Fail if coverage < 70.0
-          echo "${COVERAGE}" | awk -v th=70 '{ if (($1+0) < th) { print "ERROR: coverage below " th "% (was " $1 "% )"; exit 1 } }'
+          python3 - <<'PY'
+          import sys,xml.etree.ElementTree as ET
+          p='order/target/site/jacoco/jacoco.xml'
+          try:
+            root=ET.parse(p).getroot()
+          except Exception:
+            print('ERROR: cannot read',p); sys.exit(1)
+          c=root.find("./counter[@type='LINE']")
+          if c is None:
+            print('ERROR: LINE counter missing'); sys.exit(1)
+          missed=int(c.get('missed','0')); covered=int(c.get('covered','0'))
+          pct=covered/(missed+covered)*100 if (missed+covered)>0 else 0.0
+          print(f'Overall LINE coverage: {pct:.2f}%')
+          if pct < 70.0:
+            print(f'ERROR: coverage {pct:.2f}% < 70%'); sys.exit(1)
+          PY
 
           
       # Upload báo cáo coverage để tham chiếu sau (Yêu cầu 7b)
