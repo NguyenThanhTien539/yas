@@ -72,7 +72,7 @@ jobs:
           title: "Order Coverage Report"
           update-comment: true
 
-        - name: VerifyCoverage
+      - name: VerifyCoverage
         run: |
           python3 - <<'PY'
           import sys,xml.etree.ElementTree as ET
