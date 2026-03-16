@@ -80,60 +80,7 @@ jobs:
           script: |
             core.setFailed('Overall coverage is less than 70%')
 
-      # Coverage gate cứng: chỉ pass khi overall coverage > 70%
-      # - name: Enforce Coverage (> 70%)
-      #   env:
-      #     # Truyền loại sự kiện (push hoặc pull_request) vào môi trường
-      #     EVENT_NAME: ${{ github.event_name }}
-      #   run: |
-      #     python3 - << 'PY'
-      #     import sys
-      #     import xml.etree.ElementTree as ET
-      #     import os
-
-      #     report_path = "order/target/site/jacoco/jacoco.xml"
-      #     try:
-      #       root = ET.parse(report_path).getroot()
-      #     except FileNotFoundError:
-      #       print(f"ERROR: Coverage report not found: {report_path}")
-      #       sys.exit(1)
-
-      #     # Lấy coverage tổng từ counter type="LINE"
-      #     line_counter = root.find("./counter[@type='LINE']")
-      #     if line_counter is None:
-      #       print("ERROR: Cannot find LINE counter in jacoco.xml")
-      #       sys.exit(1)
-
-      #     missed = int(line_counter.attrib.get("missed", "0"))
-      #     covered = int(line_counter.attrib.get("covered", "0"))
-      #     total = missed + covered
-
-      #     if total == 0:
-      #       print("ERROR: Invalid coverage data (missed + covered = 0)")
-      #       sys.exit(1)
-
-      #     coverage = (covered / total) * 100
-      #     threshold = 90.0
-
-      #     print(f"Overall line coverage: {coverage:.2f}%")
           
-      #     # Lấy tên sự kiện từ biến môi trường
-      #     event_name = os.environ.get("EVENT_NAME", "")
-
-      #     if coverage <= threshold:
-      #       if event_name == 'pull_request':
-      #         # Đang mở PR gộp vào main -> Chặn đứng
-      #         print(f"ERROR: Coverage gate failed. Required > {threshold:.0f}%, got {coverage:.2f}%. Blocking merge!")
-      #         sys.exit(1)
-      #       else:
-      #         # Push lên nhánh feature -> Chỉ cảnh báo, vẫn cho pass
-      #         print(f"WARNING: Coverage is {coverage:.2f}% (Expected > {threshold:.0f}%). Allowing push to pass.")
-      #         sys.exit(0)
-
-      #     print(f"✅ Coverage gate passed: {coverage:.2f}% > {threshold:.0f}%")
-      #     PY
-          
-
       # Upload báo cáo coverage để tham chiếu sau (Yêu cầu 7b)
       - name: Upload Coverage Artifact
         uses: actions/upload-artifact@v4
@@ -147,33 +94,32 @@ jobs:
       # continue-on-error: true để không block pipeline; kết quả chỉ mang tính cảnh báo
       # Lý do dùng order/pom.xml: Snyk cần file POM cụ thể để resolve dependencies đúng trong monorepo
 
-      - name: Install Snyk CLI
-        run: npm install -g snyk
-
       - name: Snyk test
         continue-on-error: true
         env:
           SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
         run: |
+          set -euo pipefail
+          IFS=$'\n\t'
+
+          # Ensure mvnw is executable
           find . -name "mvnw" -exec chmod +x {} \;
 
-          # Tạo .mvn/maven.config để mvnw tự inject -Drevision khi khởi động,
-          # trước khi xử lý POM. Đây là cách duy nhất bypass 2-layer process của Snyk
-          # (outer CLI → inner snyk-linux binary) mà không cần env var hay --maven-args.
+          # Provide -Drevision to mvnw via .mvn/maven.config
           mkdir -p .mvn
-          echo "-Drevision=1.0-SNAPSHOT" > .mvn/maven.config
+          printf '%s\n' '-Drevision=1.0-SNAPSHOT' > .mvn/maven.config
 
-          # Install root POM + common-library vào ~/.m2 để Snyk resolve artifact coordinates.
-          mvn install -pl common-library -am -DskipTests -q
+          # Install minimal artifacts needed for Snyk resolution
+          mvn -B install -pl common-library -am -DskipTests -q
 
-          # Thay thế ${revision} literal trong các POM đã install vào local repo.
-          # Maven's artifact descriptor reader không áp dụng system properties lên POM
-          # đọc từ ~/.m2, nên common-library's POM vẫn chứa parent version ${revision}
-          # literal → fail khi Maven cố tìm com.yas:yas:pom:${revision} trên Central.
-          find ~/.m2/repository/com/yas -name "*.pom" \
-            -exec sed -i 's/\${revision}/1.0-SNAPSHOT/g' {} \;
+          # Replace ${revision} literal in any installed POMs
+          if [ -d "$HOME/.m2/repository/com/yas" ]; then
+            find "$HOME/.m2/repository/com/yas" -name "*.pom" -print0 \
+              | xargs -0 sed -i 's/\${revision}/1.0-SNAPSHOT/g' || true
+          fi
 
-          snyk auth $SNYK_TOKEN
+          # Run Snyk (do not fail the job here; step is allowed to continue-on-error)
+          snyk auth "$SNYK_TOKEN"
           snyk test --file=order/pom.xml \
             --project-name=yas-order \
             --severity-threshold=high \
@@ -181,8 +127,11 @@ jobs:
             --debug || true
 
           if [ -f snyk-report.json ]; then
-            echo "snyk-report.json created successfully"
+            echo "✓ snyk-report.json created successfully"
           else
+            echo "⚠ snyk-report.json NOT FOUND - Snyk may have failed during dependency resolution"
+            exit 1
+          fi
             echo "snyk-report.json NOT FOUND - Snyk crashed during dependency resolution!"
             exit 1
           fi
