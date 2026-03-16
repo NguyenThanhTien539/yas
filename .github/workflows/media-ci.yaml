@@ -3,6 +3,7 @@ name: media service ci
 on:
   push:
     branches: ["**"]
+    branches: ["**"]
     paths:
       - "media/**"
       - ".github/workflows/actions/action.yaml"
@@ -16,6 +17,7 @@ on:
       - ".github/workflows/media-ci.yaml"
       - "pom.xml"
   workflow_dispatch:
+  workflow_dispatch:
 
 jobs:
   # ─────────────────────────────────────────────
@@ -27,9 +29,11 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+      - uses: actions/checkout@v4
         with:
           fetch-depth: 0 # Required for SonarCloud blame history and Gitleaks full log scan
 
+      - uses: ./.github/workflows/actions # Setup JDK 21, cache Maven & Sonar
       - uses: ./.github/workflows/actions # Setup JDK 21, cache Maven & Sonar
 
       # Scan for secrets leaked in commit history
@@ -157,6 +161,10 @@ jobs:
             -pl media \
             -am \
             -DskipTests \
+          mvn -B sonar:sonar \
+            -pl media \
+            -am \
+            -DskipTests \
             -Dsonar.organization=nguyenthanhtien539 \
             -Dsonar.projectKey=NguyenThanhTien539_yas \
             -Dsonar.token=${SONAR_TOKEN} \
@@ -192,6 +200,12 @@ jobs:
         env:
           JAVA_HOME: /opt/jdk
         with:
+          project: "yas"
+          path: "."
+          format: "HTML"
+
+      - name: Upload OWASP Dependency Check Report
+        uses: actions/upload-artifact@v4
           project: "yas"
           path: "."
           format: "HTML"
