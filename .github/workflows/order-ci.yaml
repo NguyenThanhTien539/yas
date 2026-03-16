@@ -81,17 +81,23 @@ jobs:
           FILE="order/target/site/jacoco/jacoco.xml"
 
           if [ ! -f "$FILE" ]; then
-            echo "❌ jacoco.xml not found!"
+            echo "jacoco.xml not found!"
             exit 1
           fi
 
-          # lấy counter LINE cuối cùng (toàn module)
-          LINE=$(grep -A20 '<report name=' $FILE | grep 'counter type="LINE"' | head -1)
+          # Lấy counter LINE cuối cùng của toàn report
+          LINE=$(grep -o '<counter type="LINE" missed="[0-9]*" covered="[0-9]*"/>' $FILE | tail -1)
 
           MISSED=$(echo $LINE | sed -E 's/.*missed="([0-9]+)".*/\1/')
           COVERED=$(echo $LINE | sed -E 's/.*covered="([0-9]+)".*/\1/')
 
           TOTAL=$((MISSED + COVERED))
+          
+          if [ "$TOTAL" -eq 0 ]; then
+            echo "⚠️ No lines to cover. Skipping."
+            exit 0
+          fi
+          
           PERCENT=$((COVERED * 100 / TOTAL))
 
           echo "Missed lines: $MISSED"
