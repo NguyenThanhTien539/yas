@@ -2,14 +2,12 @@ name: media service ci
 
 on:
   push:
-    branches-ignore:
-      - "main"
+    branches: ["**"]
     paths:
       - "media/**"
       - ".github/workflows/actions/action.yaml"
       - ".github/workflows/media-ci.yaml"
       - "pom.xml"
-
   pull_request:
     branches: ["main"]
     paths:
@@ -17,83 +15,191 @@ on:
       - ".github/workflows/actions/action.yaml"
       - ".github/workflows/media-ci.yaml"
       - "pom.xml"
-
-
-  workflow_dispatch: # Cho phép trigger thủ công từ tab Actions trên GitHub
+  workflow_dispatch:
 
 jobs:
-  Build:
+  # ─────────────────────────────────────────────
+  # PHASE 1 – TEST
+  # Runs on every push to give developers early feedback.
+  # ─────────────────────────────────────────────
+  test:
+    name: Test
     runs-on: ubuntu-latest
-
     steps:
-      - name: Checkout code
-        uses: actions/checkout@v4 #github runner -> clone code về máy runner
+      - uses: actions/checkout@v4
         with:
-          fetch-depth: 0 # Lấy toàn bộ lịch sử commit để Gitleaks có thể phân tích
+          fetch-depth: 0 # Required for SonarCloud blame history and Gitleaks full log scan
 
-      - name: Setup Environment
-        uses: ./.github/workflows/actions
+      - uses: ./.github/workflows/actions # Setup JDK 21, cache Maven & Sonar
 
-      # 1. Gitleaks - kiểm tra secret bị lộ
-      - name: Gitleaks Scan
+      # Scan for secrets leaked in commit history
+      - name: Gitleaks – Scan for leaked secrets
         uses: gitleaks/gitleaks-action@v2
-        continue-on-error: true
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
-      # 2. Build & Test Media Service
-      - name: Maven Build
-        run: mvn clean install -pl media -am
+      # -am builds all dependencies before verifying the media module
+      - name: Run Maven Verify (test + coverage)
+        run: mvn -B clean verify -pl media -am -DskipITs
 
-      # 3. Snyk - scan security dependency
-      - name: Setup Snyk CLI
-        uses: snyk/actions/setup@master
+      # Checkstyle requires reactor context for CI-friendly versioning
+      - name: Run Maven Checkstyle
+        run: mvn checkstyle:checkstyle -pl media -am -Dcheckstyle.output.file=media-checkstyle-result.xml
 
-      - name: Snyk Security Scan
-        # continue-on-error: true để không block pipeline khi CVE được tìm thấy
-        # --json-file-output: ghi kết quả ra file để upload artifact
-        # Snyk tự dùng SNYK_TOKEN từ env, không cần gọi snyk auth thủ công
+      - name: Upload Checkstyle Result
+        uses: jwgmeligmeyling/checkstyle-github-action@master
+        with:
+          path: "**/media-checkstyle-result.xml"
+
+      # Publish test results to PR/commit page
+      - name: Upload Test Results
+        uses: dorny/test-reporter@v1
+        if: success() || failure() # Run even on failure to show report
+        with:
+          name: Media-Service-Unit-Test-Results
+          path: "media/**/surefire-reports/TEST*.xml"
+          reporter: java-junit
+
+      # Posts coverage comment on PR; fails if overall coverage < 70%.
+      # Works with branch protection "require status checks" to block low-coverage merges.
+      - name: Add Coverage Report to PR
+        id: jacoco
+        uses: madrapps/jacoco-report@v1.6.1
+        with:
+          paths: ${{ github.workspace }}/media/target/site/jacoco/jacoco.xml
+          token: ${{ secrets.GITHUB_TOKEN }}
+          min-coverage-overall: 70
+          title: "Media Coverage Report"
+          update-comment: true
+
+      - name: Upload Coverage Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: media-jacoco-report
+          path: media/target/site/jacoco
+
+      - name: VerifyCoverage
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import sys,xml.etree.ElementTree as ET
+          p='media/target/site/jacoco/jacoco.xml'
+          try:
+            root=ET.parse(p).getroot()
+          except Exception:
+            print('ERROR: cannot read',p); sys.exit(1)
+          c=root.find("./counter[@type='LINE']")
+          if c is None:
+            print('ERROR: LINE counter missing'); sys.exit(1)
+          missed=int(c.get('missed','0')); covered=int(c.get('covered','0'))
+          pct=covered/(missed+covered)*100 if (missed+covered)>0 else 0.0
+          print(f'Overall LINE coverage: {pct:.2f}%')
+          if pct < 70.0:
+            print(f'ERROR: coverage {pct:.2f}% < 70%'); sys.exit(1)
+          PY
+
+      # Scan for HIGH+ CVEs in the dependency tree.
+      # Uses media/pom.xml to resolve the correct dependency tree in this monorepo.
+      # continue-on-error: results are advisory, not blocking.
+      - name: Install Snyk CLI
+        run: npm install -g snyk
+
+      - name: Snyk test
         continue-on-error: true
         env:
           SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
         run: |
+          find . -name "mvnw" -exec chmod +x {} \;
+
+          # Inject -Drevision via .mvn/maven.config so both Maven layers (outer CLI + inner
+          # snyk-linux binary) pick it up without needing extra env vars or --maven-args.
+          mkdir -p .mvn
+          echo "-Drevision=1.0-SNAPSHOT" > .mvn/maven.config
+
+          # Install root POM + common-library so Snyk can resolve artifact coordinates.
+          mvn install -pl common-library -am -DskipTests -q
+
+          # Replace ${revision} literals in installed POMs.
+          # Maven's artifact descriptor reader does not apply system properties to POMs
+          # read from ~/.m2, causing resolution failures on Central.
+          find ~/.m2/repository/com/yas -name "*.pom" \
+            -exec sed -i 's/\${revision}/1.0-SNAPSHOT/g' {} \;
+
+          snyk auth $SNYK_TOKEN
           snyk test --file=media/pom.xml \
+            --project-name=yas-media \
             --severity-threshold=high \
-            --json-file-output=snyk-report.json
+            --json-file-output=snyk-report.json \
+            --debug || true
 
-      - name: Upload Snyk Report
+          if [ -f snyk-report.json ]; then
+            echo "snyk-report.json created successfully"
+            npx snyk-to-html -i snyk-report.json -o snyk-report.html
+          else
+            echo "snyk-report.json NOT FOUND - Snyk crashed during dependency resolution!"
+            exit 1
+          fi
+
+      - name: Upload Snyk Report (HTML)
         uses: actions/upload-artifact@v4
-        if: always() && hashFiles('snyk-report.json') != ''
+        if: always() && hashFiles('snyk-report.html') != ''
         with:
-          name: snyk-media-report
-          path: snyk-report.json
+          name: media-snyk-report-html
+          path: snyk-report.html
 
-      # 4. SonarCloud - phân tích chất lượng code
-      - name: Analyze with Sonar
+      # Reuse compiled classes and test reports from the verify step above.
+      # Avoids re-running compile+test by using sonar:sonar with -DskipTests.
+      - name: SonarCloud Scan
         env:
           SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
         run: |
-          mvn -B verify sonar:sonar \
-            -pl media -am \
+          mvn -B sonar:sonar \
+            -pl media \
+            -am \
+            -DskipTests \
             -Dsonar.organization=nguyenthanhtien539 \
             -Dsonar.projectKey=NguyenThanhTien539_yas \
-            -Dsonar.login=${SONAR_TOKEN}
+            -Dsonar.token=${SONAR_TOKEN} \
+            -Dsonar.coverage.jacoco.xmlReportPaths=${GITHUB_WORKSPACE}/media/target/site/jacoco/jacoco.xml \
+            -Dsonar.junit.reportPaths=${GITHUB_WORKSPACE}/media/target/surefire-reports
 
-      # 5. Kiểm tra coverage >= 70%
-      - name: Check Coverage
-        uses: madrapps/jacoco-report@v1.6.1
+  # ─────────────────────────────────────────────
+  # PHASE 2 – BUILD
+  # Runs only on PR to main or push to main.
+  # Feature branches only need the test phase for fast feedback.
+  # Build + OWASP scan (~10 min) is only needed before merge.
+  # ─────────────────────────────────────────────
+  build:
+    name: Build
+    runs-on: ubuntu-latest
+    needs: test # Runs only if test job passes
+    if: github.event_name == 'pull_request' || github.ref == 'refs/heads/main'
+    steps:
+      - uses: actions/checkout@v4
         with:
-          paths: ${{github.workspace}}/media/target/site/jacoco/jacoco.xml
-          token: ${{secrets.GITHUB_TOKEN}}
-          min-coverage-overall: 70
-          title: "Media Service Coverage"
-          update-comment: true
+          fetch-depth: 0
 
-      # 6. Upload Unit Test Result
-      - name: Unit Test Results
-        uses: dorny/test-reporter@v1
-        if: ${{ always() }}
+      - uses: ./.github/workflows/actions
+
+      # Build full dependency chain and package media; skip tests (already run in test phase).
+      # Maven cache from the test phase speeds this up significantly.
+      - name: Run Maven Build
+        run: mvn -B clean install -pl media -am -DskipTests
+
+      # Scan CVEs in the full dependency tree after build
+      - name: OWASP Dependency Check
+        uses: dependency-check/Dependency-Check_Action@main
+        env:
+          JAVA_HOME: /opt/jdk
         with:
-          name: Media-Service-Unit-Test-Results
-          path: "media/target/surefire-reports/*.xml"
-          reporter: java-junit
+          project: "yas"
+          path: "."
+          format: "HTML"
+
+      - name: Upload OWASP Dependency Check Report
+        uses: actions/upload-artifact@v4
+        with:
+          name: OWASP Dependency Check Report
+          path: ${{ github.workspace }}/reports
+
+
