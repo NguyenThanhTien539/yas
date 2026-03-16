@@ -191,6 +191,7 @@ jobs:
             -Dsonar.login=${SONAR_TOKEN} \
             -Dsonar.coverage.jacoco.xmlReportPaths=order/target/site/jacoco/jacoco.xml \
             -Dsonar.junit.reportPaths=order/target/surefire-reports
+            
 
   # ─────────────────────────────────────────────
   # PHASE 2 – BUILD
