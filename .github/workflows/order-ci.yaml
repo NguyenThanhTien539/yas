@@ -85,7 +85,8 @@ jobs:
             exit 1
           fi
 
-          LINE=$(grep '<counter type="LINE"' $FILE | head -1)
+          # lấy counter LINE cuối cùng (toàn module)
+          LINE=$(grep '<counter type="LINE"' $FILE | tail -1)
 
           MISSED=$(echo $LINE | sed -E 's/.*missed="([0-9]+)".*/\1/')
           COVERED=$(echo $LINE | sed -E 's/.*covered="([0-9]+)".*/\1/')
