@@ -116,11 +116,11 @@ jobs:
           if coverage <= threshold:
             if event_name == 'pull_request':
               # Đang mở PR gộp vào main -> Chặn đứng
-              print(f"❌ ERROR: Coverage gate failed. Required > {threshold:.0f}%, got {coverage:.2f}%. Blocking merge!")
+              print(f"ERROR: Coverage gate failed. Required > {threshold:.0f}%, got {coverage:.2f}%. Blocking merge!")
               sys.exit(1)
             else:
               # Push lên nhánh feature -> Chỉ cảnh báo, vẫn cho pass
-              print(f"⚠️ WARNING: Coverage is {coverage:.2f}% (Expected > {threshold:.0f}%). Allowing push to pass.")
+              print(f"WARNING: Coverage is {coverage:.2f}% (Expected > {threshold:.0f}%). Allowing push to pass.")
               sys.exit(0)
 
           print(f"✅ Coverage gate passed: {coverage:.2f}% > {threshold:.0f}%")
