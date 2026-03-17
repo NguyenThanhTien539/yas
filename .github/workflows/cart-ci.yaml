@@ -3,12 +3,14 @@ name: cart service ci
 on:
   push:
     branches: ["**"]
+    branches: ["**"]
     paths:
       - "cart/**"
       - ".github/workflows/actions/action.yaml"
       - ".github/workflows/cart-ci.yaml"
       - "pom.xml"
   pull_request:
+    branches: ["main"]
     branches: ["main"]
     paths:
       - "cart/**"
@@ -45,6 +47,7 @@ jobs:
       # Checkstyle requires reactor context for CI-friendly versioning
       - name: Run Maven Checkstyle
         run: mvn checkstyle:checkstyle -pl cart -am -Dcheckstyle.output.file=cart-checkstyle-result.xml
+
 
       - name: Upload Checkstyle Result
         uses: jwgmeligmeyling/checkstyle-github-action@master
@@ -192,6 +195,12 @@ jobs:
         env:
           JAVA_HOME: /opt/jdk
         with:
+          project: "yas"
+          path: "."
+          format: "HTML"
+
+      - name: Upload OWASP Dependency Check Report
+        uses: actions/upload-artifact@v4
           project: "yas"
           path: "."
           format: "HTML"
