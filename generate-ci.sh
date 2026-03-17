@@ -10,7 +10,7 @@ set -euo pipefail
 # Usage: bash generate-ci.sh
 
 SOURCE=".github/workflows/order-ci.yaml"
-SERVICES=("cart")
+SERVICES=("customer")
 
 # ---------------------------------------------------------------------------
 
