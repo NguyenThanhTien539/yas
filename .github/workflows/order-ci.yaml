@@ -79,6 +79,7 @@ jobs:
           path: order/target/site/jacoco
 
       - name: VerifyCoverage
+        if: github.event_name == 'pull_request'
         run: |
           set -euo pipefail
           python3 - <<'PY'
@@ -201,5 +202,3 @@ jobs:
         with:
           name: OWASP Dependency Check Report
           path: ${{ github.workspace }}/reports
-
-
