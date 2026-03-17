@@ -68,7 +68,7 @@ jobs:
         with:
           paths: ${{ github.workspace }}/order/target/site/jacoco/jacoco.xml
           token: ${{ secrets.GITHUB_TOKEN }}
-          min-coverage-overall: 70
+          min-coverage-overall: 90
           title: "Order Coverage Report"
           update-comment: true
 
@@ -79,6 +79,7 @@ jobs:
           path: order/target/site/jacoco
 
       - name: VerifyCoverage
+        if: github.event_name == 'pull_request'
         run: |
           set -euo pipefail
           python3 - <<'PY'
@@ -94,8 +95,8 @@ jobs:
           missed=int(c.get('missed','0')); covered=int(c.get('covered','0'))
           pct=covered/(missed+covered)*100 if (missed+covered)>0 else 0.0
           print(f'Overall LINE coverage: {pct:.2f}%')
-          if pct < 70.0:
-            print(f'ERROR: coverage {pct:.2f}% < 70%'); sys.exit(1)
+          if pct < 90.0:
+            print(f'ERROR: coverage {pct:.2f}% < 90.00%'); sys.exit(1)
           PY
 
       # Scan for HIGH+ CVEs in the dependency tree.
@@ -201,5 +202,3 @@ jobs:
         with:
           name: OWASP Dependency Check Report
           path: ${{ github.workspace }}/reports
-
-
