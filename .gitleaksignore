@@ -13,9 +13,5 @@ customer/src/it/resources/application.properties:generic-api-key:14
 customer/src/main/resources/application.properties:generic-api-key:34
 automation-ui/backoffice/src/test/java/com/yas/automation/ui/steps/LoginSteps.java:hashicorp-tf-password:57
 automation-ui/storefront/src/test/java/com/yas/automation/ui/steps/LoginSteps.java:hashicorp-tf-password:78
-<<<<<<< HEAD
-.github/workflows/cart-ci.yaml:generic-api-key:111
+.github/workflows/cart-ci.yaml:generic-api-key:161
 .github/workflows/location-ci.yaml:generic-api-key:205
-=======
-.github/workflows/cart-ci.yaml:generic-api-key:111
->>>>>>> c390163dc81590aeb6c62739a630943e0c931bb6
