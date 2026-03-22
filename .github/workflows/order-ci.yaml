@@ -37,7 +37,6 @@ jobs:
         uses: gitleaks/gitleaks-action@v2
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        continue-on-error: true # I need this flag for merging to main, i will fix the existing leaks in main later.
 
       # -am builds all dependencies before verifying the order module
       - name: Run Maven Verify (test + coverage)

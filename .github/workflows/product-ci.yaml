@@ -37,7 +37,6 @@ jobs:
         uses: gitleaks/gitleaks-action@v2
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        continue-on-error: true # I need this flag for merging to main, i will fix the existing leaks in main later.
 
       # -am builds all dependencies before verifying the product module
       - name: Run Maven Verify (test + coverage)
@@ -97,7 +96,7 @@ jobs:
           pct=covered/(missed+covered)*100 if (missed+covered)>0 else 0.0
           print(f'Overall LINE coverage: {pct:.2f}%')
           if pct < 70.0:
-            print(f'ERROR: coverage {pct:.2f}% < 70%'); sys.exit(1)
+            print(f'ERROR: coverage {pct:.2f}% < 70.00%'); sys.exit(1)
           PY
 
       # Scan for HIGH+ CVEs in the dependency tree.
@@ -115,7 +114,6 @@ jobs:
 
           mkdir -p .mvn
           echo "-Drevision=1.0-SNAPSHOT" > .mvn/maven.config
-
           mvn install -pl common-library -am -DskipTests -q
 
           find ~/.m2/repository/com/yas -name "*.pom" \
@@ -203,5 +201,3 @@ jobs:
         with:
           name: OWASP Dependency Check Report
           path: ${{ github.workspace }}/reports
-
-
