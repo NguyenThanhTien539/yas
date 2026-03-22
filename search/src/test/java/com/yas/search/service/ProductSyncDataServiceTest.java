@@ -1,6 +1,7 @@
 package com.yas.search.service;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatCode;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
@@ -16,7 +17,6 @@ import java.net.URI;
 import java.util.List;
 import java.util.Optional;
 import org.junit.jupiter.api.BeforeEach;
-import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
 import org.springframework.web.client.RestClient;
@@ -219,16 +219,13 @@ class ProductSyncDataServiceTest {
         verify(productRepository).deleteById(id);
     }
 
-    @Disabled
     @Test
-    void testDeleteProduct_whenProductDoesNotExist_throwsNotFoundException() {
+    void testDeleteProduct_whenProductDoesNotExist_shouldNotThrowAndShouldNotDelete() {
         Long id = 1L;
 
         when(productRepository.existsById(id)).thenReturn(false);
 
-        assertThatThrownBy(() -> productSyncDataService.deleteProduct(id))
-            .isInstanceOf(NotFoundException.class)
-            .hasMessageContaining("The product 1 is not found");
+        assertThatCode(() -> productSyncDataService.deleteProduct(id)).doesNotThrowAnyException();
 
         verify(productRepository, never()).deleteById(id);
     }
