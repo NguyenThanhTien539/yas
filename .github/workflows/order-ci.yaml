@@ -156,7 +156,7 @@ jobs:
 
           # 3. Chạy Snyk Monitor với cờ debug (-d) để xem chi tiết nếu có lỗi
           snyk monitor --file=order/pom.xml \
-            --org=nguyenthanhtien539 \
+            --org=136ead40-5311-48b6-a6ba-cf93c14ee4fd \
             --project-name=yas-order-service \
             --target-name=NguyenThanhTien539/yas \
             -d
