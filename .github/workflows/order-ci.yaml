@@ -146,17 +146,20 @@ jobs:
         env:
           SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
         run: |
-          # 1. Cài đặt các thư viện dùng chung cho Maven (như đã làm để tránh lỗi -13)
+          # 1. Setup Maven context cho biến ${revision}
           mkdir -p .mvn
           echo "-Drevision=1.0-SNAPSHOT" > .mvn/maven.config
-          mvn install -pl common-library -am -DskipTests -q
 
-          # 2. Dùng snyk monitor để đẩy lên Web
-          # Lưu ý: Không cần chạy snyk auth, Snyk sẽ tự nhận biến SNYK_TOKEN
+          # 2. Cài đặt module order VÀ tất cả các dependencies nội bộ của nó vào ~/.m2
+          # Lệnh này mất thêm vài giây nhưng là "lá chắn" chắc chắn nhất chống lại lỗi -13
+          mvn install -pl order -am -DskipTests -q
+
+          # 3. Chạy Snyk Monitor với cờ debug (-d) để xem chi tiết nếu có lỗi
           snyk monitor --file=order/pom.xml \
             --org=nguyenthanhtien539 \
             --project-name=yas-order-service \
-            --target-name=NguyenThanhTien539/yas
+            --target-name=NguyenThanhTien539/yas \
+            -d
 
       - name: Upload Snyk Report (HTML)
         uses: actions/upload-artifact@v4
