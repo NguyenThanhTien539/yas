@@ -105,42 +105,58 @@ jobs:
       - name: Install Snyk CLI
         run: npm install -g snyk
 
+      # - name: Snyk test
+      #   continue-on-error: true
+      #   env:
+      #     SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
+      #   run: |
+      #     find . -name "mvnw" -exec chmod +x {} \;
 
-      - name: Snyk test
+      #     # Inject -Drevision via .mvn/maven.config so both Maven layers (outer CLI + inner
+      #     # snyk-linux binary) pick it up without needing extra env vars or --maven-args.
+      #     mkdir -p .mvn
+      #     echo "-Drevision=1.0-SNAPSHOT" > .mvn/maven.config
+
+      #     # Install root POM + common-library so Snyk can resolve artifact coordinates.
+      #     mvn install -pl common-library -am -DskipTests -q
+
+      #     # Replace ${revision} literals in installed POMs.
+      #     # Maven's artifact descriptor reader does not apply system properties to POMs
+      #     # read from ~/.m2, causing resolution failures on Central.
+      #     find ~/.m2/repository/com/yas -name "*.pom" \
+      #       -exec sed -i 's/\${revision}/1.0-SNAPSHOT/g' {} \;
+
+      #     snyk auth $SNYK_TOKEN
+      #     snyk test --file=order/pom.xml \
+      #       --project-name=yas-order \
+      #       --severity-threshold=high \
+      #       --json-file-output=snyk-report.json \
+      #       --debug || true
+
+      #     if [ -f snyk-report.json ]; then
+      #       echo "snyk-report.json created successfully"
+      #       npx snyk-to-html -i snyk-report.json -o snyk-report.html
+      #     else
+      #       echo "snyk-report.json NOT FOUND - Snyk crashed during dependency resolution!"
+      #       exit 1
+      #     fi
+
+      - name: Snyk Monitor (Push to Web UI)
         continue-on-error: true
         env:
           SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
         run: |
-          find . -name "mvnw" -exec chmod +x {} \;
-
-          # Inject -Drevision via .mvn/maven.config so both Maven layers (outer CLI + inner
-          # snyk-linux binary) pick it up without needing extra env vars or --maven-args.
+          # 1. Cài đặt các thư viện dùng chung cho Maven (như đã làm để tránh lỗi -13)
           mkdir -p .mvn
           echo "-Drevision=1.0-SNAPSHOT" > .mvn/maven.config
-
-          # Install root POM + common-library so Snyk can resolve artifact coordinates.
           mvn install -pl common-library -am -DskipTests -q
 
-          # Replace ${revision} literals in installed POMs.
-          # Maven's artifact descriptor reader does not apply system properties to POMs
-          # read from ~/.m2, causing resolution failures on Central.
-          find ~/.m2/repository/com/yas -name "*.pom" \
-            -exec sed -i 's/\${revision}/1.0-SNAPSHOT/g' {} \;
-
-          snyk auth $SNYK_TOKEN
-          snyk test --file=order/pom.xml \
-            --project-name=yas-order \
-            --severity-threshold=high \
-            --json-file-output=snyk-report.json \
-            --debug || true
-
-          if [ -f snyk-report.json ]; then
-            echo "snyk-report.json created successfully"
-            npx snyk-to-html -i snyk-report.json -o snyk-report.html
-          else
-            echo "snyk-report.json NOT FOUND - Snyk crashed during dependency resolution!"
-            exit 1
-          fi
+          # 2. Dùng snyk monitor để đẩy lên Web
+          # Lưu ý: Không cần chạy snyk auth, Snyk sẽ tự nhận biến SNYK_TOKEN
+          snyk monitor --file=order/pom.xml \
+            --org=nguyenthanhtien539 \
+            --project-name=yas-order-service \
+            --target-name=NguyenThanhTien539/yas
 
       - name: Upload Snyk Report (HTML)
         uses: actions/upload-artifact@v4
