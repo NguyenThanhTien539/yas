@@ -141,25 +141,45 @@ jobs:
       #       exit 1
       #     fi
 
-      - name: Snyk Monitor (Push to Web UI)
+      - name: Snyk Test & Monitor
         continue-on-error: true
         env:
           SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
         run: |
-          # 1. Setup Maven context cho biến ${revision}
+          find . -name "mvnw" -exec chmod +x {} \;
+
+          # 1. Setup bối cảnh Maven và cài đặt thư viện dùng chung
           mkdir -p .mvn
           echo "-Drevision=1.0-SNAPSHOT" > .mvn/maven.config
+          mvn install -pl common-library -am -DskipTests -q
 
-          # 2. Cài đặt module order VÀ tất cả các dependencies nội bộ của nó vào ~/.m2
-          # Lệnh này mất thêm vài giây nhưng là "lá chắn" chắc chắn nhất chống lại lỗi -13
-          mvn install -pl order -am -DskipTests -q
+          # 2. Fix lỗi ${revision} trong .m2 cache
+          find ~/.m2/repository/com/yas -name "*.pom" \
+            -exec sed -i 's/\${revision}/1.0-SNAPSHOT/g' {} \;
 
-          # 3. Chạy Snyk Monitor với cờ debug (-d) để xem chi tiết nếu có lỗi
+          snyk auth $SNYK_TOKEN
+
+          # 3. Chạy snyk test để tạo file báo cáo JSON/HTML tại GitHub
+          snyk test --file=order/pom.xml \
+            --project-name=yas-order \
+            --severity-threshold=high \
+            --json-file-output=snyk-report.json \
+            --debug || true
+
+          # 4. Chạy snyk monitor để ĐẨY LÊN WEB (Với Org ID chuẩn của bạn)
           snyk monitor --file=order/pom.xml \
             --org=136ead40-5311-48b6-a6ba-cf93c14ee4fd \
             --project-name=yas-order-service \
-            --target-name=NguyenThanhTien539/yas \
-            -d
+            --target-name=NguyenThanhTien539/yas
+
+          # 5. Build file HTML từ JSON
+          if [ -f snyk-report.json ]; then
+            echo "snyk-report.json created successfully"
+            npx snyk-to-html -i snyk-report.json -o snyk-report.html
+          else
+            echo "snyk-report.json NOT FOUND - Snyk crashed during dependency resolution!"
+            exit 1
+          fi
 
       - name: Upload Snyk Report (HTML)
         uses: actions/upload-artifact@v4
