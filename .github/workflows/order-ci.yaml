@@ -105,6 +105,7 @@ jobs:
       - name: Install Snyk CLI
         run: npm install -g snyk
 
+
       - name: Snyk test
         continue-on-error: true
         env:
