@@ -148,7 +148,6 @@ jobs:
         run: |
           find . -name "mvnw" -exec chmod +x {} \;
 
-          # 1. Setup bối cảnh Maven và cài đặt thư viện dùng chung
           mkdir -p .mvn
           echo "-Drevision=1.0-SNAPSHOT" > .mvn/maven.config
           mvn install -pl common-library -am -DskipTests -q
