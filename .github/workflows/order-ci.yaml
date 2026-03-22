@@ -105,42 +105,6 @@ jobs:
       - name: Install Snyk CLI
         run: npm install -g snyk
 
-      # - name: Snyk test
-      #   continue-on-error: true
-      #   env:
-      #     SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
-      #   run: |
-      #     find . -name "mvnw" -exec chmod +x {} \;
-
-      #     # Inject -Drevision via .mvn/maven.config so both Maven layers (outer CLI + inner
-      #     # snyk-linux binary) pick it up without needing extra env vars or --maven-args.
-      #     mkdir -p .mvn
-      #     echo "-Drevision=1.0-SNAPSHOT" > .mvn/maven.config
-
-      #     # Install root POM + common-library so Snyk can resolve artifact coordinates.
-      #     mvn install -pl common-library -am -DskipTests -q
-
-      #     # Replace ${revision} literals in installed POMs.
-      #     # Maven's artifact descriptor reader does not apply system properties to POMs
-      #     # read from ~/.m2, causing resolution failures on Central.
-      #     find ~/.m2/repository/com/yas -name "*.pom" \
-      #       -exec sed -i 's/\${revision}/1.0-SNAPSHOT/g' {} \;
-
-      #     snyk auth $SNYK_TOKEN
-      #     snyk test --file=order/pom.xml \
-      #       --project-name=yas-order \
-      #       --severity-threshold=high \
-      #       --json-file-output=snyk-report.json \
-      #       --debug || true
-
-      #     if [ -f snyk-report.json ]; then
-      #       echo "snyk-report.json created successfully"
-      #       npx snyk-to-html -i snyk-report.json -o snyk-report.html
-      #     else
-      #       echo "snyk-report.json NOT FOUND - Snyk crashed during dependency resolution!"
-      #       exit 1
-      #     fi
-
       - name: Snyk Test & Monitor
         continue-on-error: true
         env:
@@ -152,26 +116,22 @@ jobs:
           echo "-Drevision=1.0-SNAPSHOT" > .mvn/maven.config
           mvn install -pl common-library -am -DskipTests -q
 
-          # 2. Fix lỗi ${revision} trong .m2 cache
           find ~/.m2/repository/com/yas -name "*.pom" \
             -exec sed -i 's/\${revision}/1.0-SNAPSHOT/g' {} \;
 
           snyk auth $SNYK_TOKEN
 
-          # 3. Chạy snyk test để tạo file báo cáo JSON/HTML tại GitHub
           snyk test --file=order/pom.xml \
             --project-name=yas-order \
             --severity-threshold=high \
             --json-file-output=snyk-report.json \
             --debug || true
 
-          # 4. Chạy snyk monitor để ĐẨY LÊN WEB (Với Org ID chuẩn của bạn)
           snyk monitor --file=order/pom.xml \
             --org=136ead40-5311-48b6-a6ba-cf93c14ee4fd \
             --project-name=yas-order-service \
             --target-name=NguyenThanhTien539/yas
 
-          # 5. Build file HTML từ JSON
           if [ -f snyk-report.json ]; then
             echo "snyk-report.json created successfully"
             npx snyk-to-html -i snyk-report.json -o snyk-report.html
