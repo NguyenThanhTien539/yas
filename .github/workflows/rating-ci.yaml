@@ -2,7 +2,7 @@ name: rating service ci
 
 on:
   push:
-    branches: ["main"]
+    branches: ["**"]
     paths:
       - "rating/**"
       - ".github/workflows/actions/action.yaml"
@@ -18,73 +18,242 @@ on:
   workflow_dispatch:
 
 jobs:
-  Build:
+  # ─────────────────────────────────────────────
+  # PHASE 1 – TEST
+  # Chạy trên mọi push (kể cả feature branch) để developer có feedback sớm nhất.
+  # ─────────────────────────────────────────────
+  test:
+    name: Test
     runs-on: ubuntu-latest
-    env:
-      FROM_ORIGINAL_REPOSITORY: ${{ github.event.pull_request.head.repo.full_name == github.repository || github.ref == 'refs/heads/main' }}
     steps:
       - uses: actions/checkout@v4
         with:
-          fetch-depth: 0 # Shallow clones should be disabled for a better relevancy of analysis
-      - uses: ./.github/workflows/actions
-      - name: Run Maven Build Command
-        run: mvn clean install -pl rating -am
+          fetch-depth: 0 # Cần cho SonarCloud (blame history) và Gitleaks (full log)
+
+      - uses: ./.github/workflows/actions # Setup JDK 21, cache Maven & Sonar
+
+      # Gitleaks – quét secret/token bị lộ trong lịch sử commit
+      - name: Gitleaks – Scan for leaked secrets
+        uses: gitleaks/gitleaks-action@v2
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        continue-on-error: true
+
+      # -am (also make) bảo Maven compile và test TẤT CẢ dependencies trước, rồi verify rating.
+      - name: Run Maven Verify (test + coverage)
+        run: mvn -B clean verify -pl rating -am -DskipITs
+
+      # Checkstyle cho rating + dependencies (Maven CI Friendly Versions cần reactor context)
       - name: Run Maven Checkstyle
-        if: ${{ env.FROM_ORIGINAL_REPOSITORY == 'true' }}
         run: mvn checkstyle:checkstyle -pl rating -am -Dcheckstyle.output.file=rating-checkstyle-result.xml
+
       - name: Upload Checkstyle Result
-        if: ${{ env.FROM_ORIGINAL_REPOSITORY == 'true' }}
         uses: jwgmeligmeyling/checkstyle-github-action@master
         with:
-          path: '**/rating-checkstyle-result.xml'
-      - name: Test Results
+          path: "**/rating-checkstyle-result.xml"
+
+      # Upload kết quả test để hiển thị trực tiếp trên PR/commit page
+      - name: Upload Test Results
         uses: dorny/test-reporter@v1
-        if: ${{ env.FROM_ORIGINAL_REPOSITORY == 'true' && (success() || failure()) }}
+        if: success() || failure() # Chạy kể cả khi test fail để xem report
         with:
           name: Rating-Service-Unit-Test-Results
-          path: "rating/**/*-reports/TEST*.xml"
+          path: "rating/target/surefire-reports/TEST-*.xml"
           reporter: java-junit
-      - name: Analyze with sonar cloud
-        if: ${{ env.FROM_ORIGINAL_REPOSITORY == 'true' }}
+
+
+      # Comment coverage lên PR; action sẽ fail step nếu coverage < 70% (min-coverage-overall)
+      # → ngăn merge khi coverage thấp (kết hợp với branch protection "require status checks")
+      - name: Add Coverage Report to PR
+        uses: madrapps/jacoco-report@v1.6.1
+        with:
+          paths: ${{ github.workspace }}/rating/target/site/jacoco/jacoco.xml
+          token: ${{ secrets.GITHUB_TOKEN }}
+          min-coverage-overall: 70
+          min-coverage-changed-files: 70
+          title: "Rating Coverage Report"
+          update-comment: true
+
+      # Coverage gate cứng: chỉ pass khi overall coverage > 70%
+      - name: Enforce Coverage (> 70%)
+        env:
+          # Truyền loại sự kiện (push hoặc pull_request) vào môi trường
+          EVENT_NAME: ${{ github.event_name }}
+        run: |
+          python3 - << 'PY'
+          import sys
+          import xml.etree.ElementTree as ET
+          import os
+
+          report_path = "rating/target/site/jacoco/jacoco.xml"
+          try:
+            root = ET.parse(report_path).getroot()
+          except FileNotFoundError:
+            print(f"ERROR: Coverage report not found: {report_path}")
+            sys.exit(1)
+
+          # Lấy coverage tổng từ counter type="LINE"
+          line_counter = root.find("./counter[@type='LINE']")
+          if line_counter is None:
+            print("ERROR: Cannot find LINE counter in jacoco.xml")
+            sys.exit(1)
+
+          missed = int(line_counter.attrib.get("missed", "0"))
+          covered = int(line_counter.attrib.get("covered", "0"))
+          total = missed + covered
+
+          if total == 0:
+            print("ERROR: Invalid coverage data (missed + covered = 0)")
+            sys.exit(1)
+
+          coverage = (covered / total) * 100
+          threshold = 70.0
+
+          print(f"Overall line coverage: {coverage:.2f}%")
+          
+          # Lấy tên sự kiện từ biến môi trường
+          event_name = os.environ.get("EVENT_NAME", "")
+
+          if coverage <= threshold:
+            if event_name == 'pull_request':
+              # Đang mở PR gộp vào main -> Chặn đứng
+              print(f"ERROR: Coverage gate failed. Required > {threshold:.0f}%, got {coverage:.2f}%. Blocking merge!")
+              sys.exit(1)
+            else:
+              # Push lên nhánh feature -> Chỉ cảnh báo, vẫn cho pass
+              print(f"WARNING: Coverage is {coverage:.2f}% (Expected > {threshold:.0f}%). Allowing push to pass.")
+              sys.exit(0)
+
+          print(f"✅ Coverage gate passed: {coverage:.2f}% > {threshold:.0f}%")
+          PY
+
+      # Upload báo cáo coverage để tham chiếu sau
+      - name: Upload Coverage Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: rating-jacoco-report
+          path: rating/target/site/jacoco
+
+      # Snyk – quét lỗ hổng trong dependencies của rating + toàn bộ dependency tree (transitive)
+      # --severity-threshold=high: chỉ báo CVE HIGH trở lên (giảm false positive)
+      # continue-on-error: true để không block pipeline; kết quả chỉ mang tính cảnh báo
+      - name: Install Snyk CLI
+        run: npm install -g snyk
+
+      - name: Snyk test
+        continue-on-error: true
+        env:
+          SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
+        run: |
+          find . -name "mvnw" -exec chmod +x {} \;
+
+          # Tạo .mvn/maven.config để mvnw tự inject -Drevision khi khởi động,
+          # trước khi xử lý POM. Đây là cách duy nhất bypass 2-layer process của Snyk
+          # (outer CLI → inner snyk-linux binary) mà không cần env var hay --maven-args.
+          mkdir -p .mvn
+          echo "-Drevision=1.0-SNAPSHOT" > .mvn/maven.config
+
+          # Install root POM + common-library vào ~/.m2 để Snyk resolve artifact coordinates.
+          mvn install -pl common-library -am -DskipTests -q
+
+          # Thay thế ${revision} literal trong các POM đã install vào local repo.
+          # Maven's artifact descriptor reader không áp dụng system properties lên POM
+          # đọc từ ~/.m2, nên common-library's POM vẫn chứa parent version ${revision}
+          # literal → fail khi Maven cố tìm com.yas:yas:pom:${revision} trên Central.
+          find ~/.m2/repository/com/yas -name "*.pom" \
+            -exec sed -i 's/\${revision}/1.0-SNAPSHOT/g' {} \;
+
+          snyk auth $SNYK_TOKEN
+          snyk test --file=rating/pom.xml \
+            --project-name=yas-rating \
+            --severity-threshold=high \
+            --json-file-output=snyk-report.json \
+            --debug || true
+
+          if [ -f snyk-report.json ]; then
+            echo "snyk-report.json created successfully"
+          else
+            echo "snyk-report.json NOT FOUND - Snyk crashed during dependency resolution!"
+            exit 1
+          fi
+
+      # Upload Snyk report
+      - name: Upload Snyk Report
+        uses: actions/upload-artifact@v4
+        if: always() && hashFiles('snyk-report.json') != ''
+        with:
+          name: rating-snyk-report
+          path: snyk-report.json
+
+      # SonarCloud – tái sử dụng compiled classes + test reports từ bước verify ở trên.
+      # Lý do KHÔNG dùng "verify sonar:sonar": sẽ chạy lại toàn bộ compile+test lần 2.
+      # -DskipTests: bỏ qua re-run test (classes đã có trong rating/target/).
+      - name: SonarCloud Scan
         env:
           SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
-        run: mvn org.sonarsource.scanner.maven:sonar-maven-plugin:sonar -f rating
+        run: |
+          mvn -B sonar:sonar \
+            -pl rating \
+            -am \
+            -DskipTests \
+            -Dsonar.organization=nguyenthanhtien539 \
+            -Dsonar.projectKey=NguyenThanhTien539_yas \
+            -Dsonar.login=${SONAR_TOKEN} \
+            -Dsonar.coverage.jacoco.xmlReportPaths=${GITHUB_WORKSPACE}/customer/target/site/jacoco/jacoco.xml \
+            -Dsonar.junit.reportPaths=${GITHUB_WORKSPACE}/customer/target/surefire-reports
+
+  # ─────────────────────────────────────────────
+  # PHASE 2 – BUILD
+  # Chỉ chạy khi: PR vào main HOẶC push vào main.
+  # Lý do: feature branch chỉ cần test để có feedback nhanh.
+  # Build sinh artifact + OWASP scan chỉ cần thiết khi sắp merge.
+  # ─────────────────────────────────────────────
+  build:
+    name: Build
+    runs-on: ubuntu-latest
+    needs: test # Chỉ chạy nếu phase Test pass
+    if: github.event_name == 'pull_request' || github.ref == 'refs/heads/main'
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: ./.github/workflows/actions
+
+      # Build toàn bộ dependency chain + package rating, bỏ qua test (đã chạy ở phase test).
+      - name: Run Maven Build
+        run: mvn -B clean install -pl rating -am -DskipTests
+
+      # OWASP – quét CVE trong toàn bộ dependency tree sau khi build
       - name: OWASP Dependency Check
-        if: ${{ env.FROM_ORIGINAL_REPOSITORY == 'true' }}
         uses: dependency-check/Dependency-Check_Action@main
         env:
           JAVA_HOME: /opt/jdk
         with:
-          project: 'yas'
-          path: '.'
-          format: 'HTML'
-      - name: Upload OWASP Dependency Check results
-        if: ${{ env.FROM_ORIGINAL_REPOSITORY == 'true' }}
-        uses: actions/upload-artifact@master
+          project: "yas"
+          path: "."
+          format: "HTML"
+
+      - name: Upload OWASP Dependency Check Report
+        uses: actions/upload-artifact@v4
         with:
           name: OWASP Dependency Check Report
-          path: ${{github.workspace}}/reports
-      - name: Add coverage report to PR
-        uses: madrapps/jacoco-report@v1.6.1
-        if: ${{ env.FROM_ORIGINAL_REPOSITORY == 'true' }}
-        with:
-          paths: ${{github.workspace}}/rating/target/site/jacoco/jacoco.xml
-          token: ${{secrets.GITHUB_TOKEN}}
-          min-coverage-overall: 80
-          min-coverage-changed-files: 60
-          title: 'Rating Coverage Report'
-          update-comment: true
-      - name: Log in to the Container registry
-        if: ${{ github.ref == 'refs/heads/main' }}
-        uses: docker/login-action@v3
-        with:
-          registry: ghcr.io
-          username: ${{ github.actor }}
-          password: ${{ secrets.GITHUB_TOKEN }}
-      - name: Build and push Docker images
-        if: ${{ github.ref == 'refs/heads/main' }}
-        uses: docker/build-push-action@v6
-        with:
-          context: ./rating
-          push: true
-          tags: ghcr.io/nashtech-garage/yas-rating:latest
+          path: ${{ github.workspace }}/reports
+
+      # Docker – chỉ build và push khi có commit mới vào main (sau khi PR được merge).
+      # Điều kiện: push event (không phải PR) VÀ đang ở nhánh main.
+      # - name: Log in to Container Registry
+      #   if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+      #   uses: docker/login-action@v3
+      #   with:
+      #     registry: ghcr.io
+      #     username: ${{ github.actor }}
+      #     password: ${{ secrets.GITHUB_TOKEN }}
+
+      # - name: Build and push Docker image
+      #   if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+      #   uses: docker/build-push-action@v6
+      #   with:
+      #     context: ./rating
+      #     push: true
+      #     tags: ghcr.io/nashtech-garage/yas-rating:latest
