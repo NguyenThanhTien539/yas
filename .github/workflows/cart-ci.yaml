@@ -187,19 +187,23 @@ jobs:
       # Maven cache from the test phase speeds this up significantly.
       - name: Run Maven Build
         run: mvn -B clean install -pl cart -am -DskipTests
-
+      
+      # Log in to Docker Hub using secrets for secure authentication
       - name: Log in to Docker Hub
         uses: docker/login-action@v3
         with:
           username: ${{ secrets.DOCKERHUB_USERNAME }}
           password: ${{ secrets.DOCKERHUB_TOKEN }}
 
+      # Build and push Docker image for the cart service; tag with latest commit SHA for traceability
       - name: Build and Push Docker Image
         uses: docker/build-push-action@v6
         with:
           context: ./cart
           push: true
-          tags: ${{ secrets.DOCKERHUB_USERNAME }}/yas-cart:${{ github.sha }}
+          tags: |
+            ${{ secrets.DOCKERHUB_USERNAME }}/yas-cart:${{ github.sha }}
+            ${{ github.ref == 'refs/heads/main' && format('{0}/yas-cart:latest', secrets.DOCKERHUB_USERNAME) || '' }}
 
       # Scan CVEs in the full dependency tree after build
       - name: OWASP Dependency Check
