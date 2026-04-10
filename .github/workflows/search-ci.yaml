@@ -1,4 +1,4 @@
-name: search service ci
+﻿name: search service ci
 
 on:
   push:
@@ -40,7 +40,9 @@ jobs:
 
       # -am builds all dependencies before verifying the search module
       - name: Run Maven Verify (test + coverage)
-        run: mvn -B clean verify -pl search -am -DskipITs
+        run: |
+          mvn install -pl common-library -am -DskipTests
+          mvn -B clean verify -pl search -am -DskipITs
 
       # Checkstyle requires reactor context for CI-friendly versioning
       - name: Run Maven Checkstyle
@@ -173,7 +175,7 @@ jobs:
     name: Build
     runs-on: ubuntu-latest
     needs: test # Runs only if test job passes
-    if: github.event_name == 'pull_request' || github.ref == 'refs/heads/main'
+    if: github.event_name == 'push'
     steps:
       - uses: actions/checkout@v4
         with:
@@ -185,6 +187,23 @@ jobs:
       # Maven cache from the test phase speeds this up significantly.
       - name: Run Maven Build
         run: mvn -B clean install -pl search -am -DskipTests
+      
+      # Log in to Docker Hub using secrets for secure authentication
+      - name: Log in to Docker Hub
+        uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+
+      # Build and push Docker image for the search service; tag with latest commit SHA for traceability
+      - name: Build and Push Docker Image
+        uses: docker/build-push-action@v6
+        with:
+          context: ./search
+          push: true
+          tags: |
+            ${{ secrets.DOCKERHUB_USERNAME }}/yas-search:${{ github.sha }}
+            ${{ github.ref == 'refs/heads/main' && format('{0}/yas-search:latest', secrets.DOCKERHUB_USERNAME) || '' }}
 
       # Scan CVEs in the full dependency tree after build
       - name: OWASP Dependency Check
