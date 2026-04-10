@@ -40,7 +40,9 @@ jobs:
 
       # -am builds all dependencies before verifying the cart module
       - name: Run Maven Verify (test + coverage)
-        run: mvn -B clean verify -pl cart -am -DskipITs
+        run: |
+          mvn install -pl common-library -am -DskipTests
+          mvn -B clean verify -pl cart -am -DskipITs
 
       # Checkstyle requires reactor context for CI-friendly versioning
       - name: Run Maven Checkstyle
