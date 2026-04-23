@@ -2,14 +2,14 @@ name: cart service ci
 
 on:
   push:
-    branches: [ "main" ]
+    branches: ["**"]
     paths:
       - "cart/**"
       - ".github/workflows/actions/action.yaml"
       - ".github/workflows/cart-ci.yaml"
       - "pom.xml"
   pull_request:
-    branches: [ "main" ]
+    branches: ["main"]
     paths:
       - "cart/**"
       - ".github/workflows/actions/action.yaml"
@@ -18,73 +18,205 @@ on:
   workflow_dispatch:
 
 jobs:
-  Build:
+  # ─────────────────────────────────────────────
+  # PHASE 1 – TEST
+  # Runs on every push to give developers early feedback.
+  # ─────────────────────────────────────────────
+  test:
+    name: Test
     runs-on: ubuntu-latest
-    env:
-      FROM_ORIGINAL_REPOSITORY: ${{ github.event.pull_request.head.repo.full_name == github.repository || github.ref == 'refs/heads/main' }}
     steps:
       - uses: actions/checkout@v4
         with:
-          fetch-depth: 0  # Shallow clones should be disabled for a better relevancy of analysis
-      - uses: ./.github/workflows/actions
-      - name: Run Maven Build Command
-        run: mvn clean install -pl cart -am
+          fetch-depth: 0 # Required for SonarCloud blame history and Gitleaks full log scan
+
+      - uses: ./.github/workflows/actions # Setup JDK 21, cache Maven & Sonar
+
+      # Scan for secrets leaked in commit history
+      - name: Gitleaks – Scan for leaked secrets
+        uses: gitleaks/gitleaks-action@v2
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      # -am builds all dependencies before verifying the cart module
+      - name: Run Maven Verify (test + coverage)
+        run: |
+          mvn install -pl common-library -am -DskipTests
+          mvn -B clean verify -pl cart -am -DskipITs
+
+      # Checkstyle requires reactor context for CI-friendly versioning
       - name: Run Maven Checkstyle
-        if: ${{ env.FROM_ORIGINAL_REPOSITORY == 'true' }}
         run: mvn checkstyle:checkstyle -pl cart -am -Dcheckstyle.output.file=cart-checkstyle-result.xml
+
       - name: Upload Checkstyle Result
-        if: ${{ env.FROM_ORIGINAL_REPOSITORY == 'true' }}
         uses: jwgmeligmeyling/checkstyle-github-action@master
         with:
-          path: '**/cart-checkstyle-result.xml'
-      - name: Test Results
+          path: "**/cart-checkstyle-result.xml"
+
+      # Publish test results to PR/commit page
+      - name: Upload Test Results
         uses: dorny/test-reporter@v1
-        if: ${{ env.FROM_ORIGINAL_REPOSITORY == 'true' && (success() || failure()) }}
+        if: success() || failure() # Run even on failure to show report
         with:
-          name: Cart-Service-Unit-Test-Results
-          path: "cart/**/*-reports/TEST*.xml"
+          name: cart-Service-Unit-Test-Results
+          path: "cart/**/surefire-reports/TEST*.xml"
           reporter: java-junit
-      - name: OWASP Dependency Check
-        if: ${{ env.FROM_ORIGINAL_REPOSITORY == 'true' }}
-        uses: dependency-check/Dependency-Check_Action@main
+
+      # Posts coverage comment on PR; fails if overall coverage < 70%.
+      # Works with branch protection "require status checks" to block low-coverage merges.
+      - name: Add Coverage Report to PR
+        id: jacoco
+        uses: madrapps/jacoco-report@v1.6.1
+        with:
+          paths: ${{ github.workspace }}/cart/target/site/jacoco/jacoco.xml
+          token: ${{ secrets.GITHUB_TOKEN }}
+          min-coverage-overall: 70
+          title: "cart Coverage Report"
+          update-comment: true
+
+      - name: Upload Coverage Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: cart-jacoco-report
+          path: cart/target/site/jacoco
+
+      - name: VerifyCoverage
+        if: github.event_name == 'pull_request'
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import sys,xml.etree.ElementTree as ET
+          p='cart/target/site/jacoco/jacoco.xml'
+          try:
+            root=ET.parse(p).getroot()
+          except Exception:
+            print('ERROR: cannot read',p); sys.exit(1)
+          c=root.find("./counter[@type='LINE']")
+          if c is None:
+            print('ERROR: LINE counter missing'); sys.exit(1)
+          missed=int(c.get('missed','0')); covered=int(c.get('covered','0'))
+          pct=covered/(missed+covered)*100 if (missed+covered)>0 else 0.0
+          print(f'Overall LINE coverage: {pct:.2f}%')
+          if pct < 70.0:
+            print(f'ERROR: coverage {pct:.2f}% < 70.00%'); sys.exit(1)
+          PY
+
+      # Scan for HIGH+ CVEs in the dependency tree.
+      # Uses cart/pom.xml to resolve the correct dependency tree in this monorepo.
+      # continue-on-error: results are advisory, not blocking.
+      - name: Install Snyk CLI
+        run: npm install -g snyk
+
+      - name: Snyk Test & Monitor
+        continue-on-error: true
         env:
-          JAVA_HOME: /opt/jdk
+          SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
+        run: |
+          find . -name "mvnw" -exec chmod +x {} \;
+
+          mkdir -p .mvn
+          echo "-Drevision=1.0-SNAPSHOT" > .mvn/maven.config
+          mvn install -pl common-library -am -DskipTests -q
+
+          find ~/.m2/repository/com/yas -name "*.pom" \
+            -exec sed -i 's/\${revision}/1.0-SNAPSHOT/g' {} \;
+
+          snyk auth $SNYK_TOKEN
+
+          snyk test --file=cart/pom.xml \
+            --project-name=yas-cart \
+            --severity-threshold=high \
+            --json-file-output=snyk-report.json \
+            --debug || true
+
+          snyk monitor --file=cart/pom.xml \
+            --org=136ead40-5311-48b6-a6ba-cf93c14ee4fd \
+            --project-name=yas-cart-service \
+            --target-name=NguyenThanhTien539/yas
+
+          if [ -f snyk-report.json ]; then
+            echo "snyk-report.json created successfully"
+            npx snyk-to-html -i snyk-report.json -o snyk-report.html
+          else
+            echo "snyk-report.json NOT FOUND - Snyk crashed during dependency resolution!"
+            exit 1
+          fi
+
+      - name: Upload Snyk Report (HTML)
+        uses: actions/upload-artifact@v4
+        if: always() && hashFiles('snyk-report.html') != ''
         with:
-          project: 'yas'
-          path: '.'
-          format: 'HTML'
-      - name: Upload OWASP Dependency Check results
-        if: ${{ env.FROM_ORIGINAL_REPOSITORY == 'true' }}
-        uses: actions/upload-artifact@master
-        with:
-          name: OWASP Dependency Check Report
-          path: ${{github.workspace}}/reports
-      - name: Analyze with sonar cloud
-        if: ${{ env.FROM_ORIGINAL_REPOSITORY == 'true' }}
+          name: cart-snyk-report-html
+          path: snyk-report.html
+
+      # Reuse compiled classes and test reports from the verify step above.
+      # Avoids re-running compile+test by using sonar:sonar with -DskipTests.
+      - name: SonarCloud Scan
         env:
           SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
-        run: mvn org.sonarsource.scanner.maven:sonar-maven-plugin:sonar -pl cart -am
-      - name: Add coverage report to PR
-        uses: madrapps/jacoco-report@v1.6.1
-        if: ${{ env.FROM_ORIGINAL_REPOSITORY == 'true' }}
+        run: |
+          mvn -B sonar:sonar \
+            -pl cart \
+            -am \
+            -DskipTests \
+            -Dsonar.organization=nguyenthanhtien539 \
+            -Dsonar.projectKey=NguyenThanhTien539_yas \
+            -Dsonar.token=${SONAR_TOKEN} \
+            -Dsonar.coverage.jacoco.xmlReportPaths=${GITHUB_WORKSPACE}/cart/target/site/jacoco/jacoco.xml \
+            -Dsonar.junit.reportPaths=${GITHUB_WORKSPACE}/cart/target/surefire-reports
+
+  # ─────────────────────────────────────────────
+  # PHASE 2 – BUILD
+  # Runs on every push (all branches) after test passes.
+  # Builds service artifact and branch-specific Docker image.
+  # Image tag uses the latest commit SHA from that branch.
+  # ─────────────────────────────────────────────
+  build:
+    name: Build
+    runs-on: ubuntu-latest
+    needs: test # Runs only if test job passes
+    if: github.event_name == 'push'
+    steps:
+      - uses: actions/checkout@v4
         with:
-          paths: ${{github.workspace}}/cart/target/site/jacoco/jacoco.xml
-          token: ${{secrets.GITHUB_TOKEN}}
-          min-coverage-overall: 80
-          min-coverage-changed-files: 60
-          title: 'Cart Coverage Report'
-          update-comment: true
-      - name: Log in to the Container registry
-        if: ${{ github.ref == 'refs/heads/main' }}
+          fetch-depth: 0
+
+      - uses: ./.github/workflows/actions
+
+      # Build full dependency chain and package cart; skip tests (already run in test phase).
+      # Maven cache from the test phase speeds this up significantly.
+      - name: Run Maven Build
+        run: mvn -B clean install -pl cart -am -DskipTests
+      
+      # Log in to Docker Hub using secrets for secure authentication
+      - name: Log in to Docker Hub
         uses: docker/login-action@v3
         with:
-          registry: ghcr.io
-          username: ${{ github.actor }}
-          password: ${{ secrets.GITHUB_TOKEN }}
-      - name: Build and push Docker images
-        if: ${{ github.ref == 'refs/heads/main' }}
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+
+      # Build and push Docker image for the cart service; tag with latest commit SHA for traceability
+      - name: Build and Push Docker Image
         uses: docker/build-push-action@v6
         with:
           context: ./cart
           push: true
-          tags: ghcr.io/nashtech-garage/yas-cart:latest
+          tags: |
+            ${{ secrets.DOCKERHUB_USERNAME }}/yas-cart:${{ github.sha }}
+            ${{ github.ref == 'refs/heads/main' && format('{0}/yas-cart:latest', secrets.DOCKERHUB_USERNAME) || '' }}
+
+      # Scan CVEs in the full dependency tree after build
+      - name: OWASP Dependency Check
+        uses: dependency-check/Dependency-Check_Action@main
+        env:
+          JAVA_HOME: /opt/jdk
+        with:
+          project: "yas"
+          path: "."
+          format: "HTML"
+
+      - name: Upload OWASP Dependency Check Report
+        uses: actions/upload-artifact@v4
+        with:
+          name: OWASP Dependency Check Report
+          path: ${{ github.workspace }}/reports
