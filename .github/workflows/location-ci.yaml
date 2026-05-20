@@ -44,7 +44,11 @@ jobs:
 
       # Checkstyle requires reactor context for CI-friendly versioning
       - name: Run Maven Checkstyle
-        run: mvn checkstyle:checkstyle -pl location -am -Dcheckstyle.output.file=location-checkstyle-result.xml
+        run: |
+          mvn -B compile checkstyle:check \
+            -pl location -am \
+            -DskipTests -DskipITs \
+            -Dcheckstyle.output.file=location-checkstyle-result.xml
 
       - name: Upload Checkstyle Result
         uses: jwgmeligmeyling/checkstyle-github-action@master
