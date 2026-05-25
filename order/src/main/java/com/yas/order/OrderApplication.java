@@ -13,5 +13,9 @@ public class OrderApplication {
         SpringApplication.run(OrderApplication.class, args);
     }
 
+    public void badCode() {
+        String password = "admin123";
+        System.out.println(password);
+    }
 
 }
