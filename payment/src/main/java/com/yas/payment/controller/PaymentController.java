@@ -19,6 +19,7 @@ public class PaymentController {
 
     private final PaymentService paymentService;
 
+    
     @PostMapping(value = "/init")
     public InitPaymentResponseVm initPayment(@Valid @RequestBody InitPaymentRequestVm initPaymentRequestVm) {
         return paymentService.initPayment(initPaymentRequestVm);

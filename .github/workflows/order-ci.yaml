@@ -1,4 +1,4 @@
-name: order service ci
+﻿name: order service ci
 
 on:
   push:
@@ -15,6 +15,7 @@ on:
       - ".github/workflows/actions/action.yaml"
       - ".github/workflows/order-ci.yaml"
       - "pom.xml"
+
   workflow_dispatch:
 
 jobs:
@@ -32,12 +33,12 @@ jobs:
 
       - uses: ./.github/workflows/actions # Setup JDK 21, cache Maven & Sonar
 
+
       # Scan for secrets leaked in commit history
       - name: Gitleaks – Scan for leaked secrets
         uses: gitleaks/gitleaks-action@v2
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        continue-on-error: true # I need this flag for merging to main, i will fix the existing leaks in main later.
 
       # -am builds all dependencies before verifying the order module
       - name: Run Maven Verify (test + coverage)
@@ -45,7 +46,11 @@ jobs:
 
       # Checkstyle requires reactor context for CI-friendly versioning
       - name: Run Maven Checkstyle
-        run: mvn checkstyle:checkstyle -pl order -am -Dcheckstyle.output.file=order-checkstyle-result.xml
+        run: |
+          mvn -B compile checkstyle:check \
+            -pl order -am \
+            -DskipTests -DskipITs \
+            -Dcheckstyle.output.file=order-checkstyle-result.xml
 
       - name: Upload Checkstyle Result
         uses: jwgmeligmeyling/checkstyle-github-action@master
@@ -196,6 +201,8 @@ jobs:
           project: "yas"
           path: "."
           format: "HTML"
+          # out: reports
+          # args: --noupdate --disableCentral
 
       - name: Upload OWASP Dependency Check Report
         uses: actions/upload-artifact@v4
