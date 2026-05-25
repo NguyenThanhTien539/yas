@@ -58,7 +58,7 @@ jobs:
       # Publish test results to PR/commit page
       - name: Upload Test Results
         uses: dorny/test-reporter@v1
-        if: success() || failure() # Run even on failure to show report
+        if: success() # Run even on failure to show report
         with:
           name: product-Service-Unit-Test-Results
           path: "product/**/surefire-reports/TEST*.xml"
@@ -190,18 +190,18 @@ jobs:
       - name: Run Maven Build
         run: mvn -B clean install -pl product -am -DskipTests
 
-      # # Scan CVEs in the full dependency tree after build
-      # - name: OWASP Dependency Check
-      #   uses: dependency-check/Dependency-Check_Action@main
-      #   env:
-      #     JAVA_HOME: /opt/jdk
-      #   with:
-      #     project: "yas"
-      #     path: "."
-      #     format: "HTML"
+      # Scan CVEs in the full dependency tree after build
+      - name: OWASP Dependency Check
+        uses: dependency-check/Dependency-Check_Action@main
+        env:
+          JAVA_HOME: /opt/jdk
+        with:
+          project: "yas"
+          path: "."
+          format: "HTML"
 
-      # - name: Upload OWASP Dependency Check Report
-      #   uses: actions/upload-artifact@v4
-      #   with:
-      #     name: OWASP Dependency Check Report
-      #     path: ${{ github.workspace }}/reports
+      - name: Upload OWASP Dependency Check Report
+        uses: actions/upload-artifact@v4
+        with:
+          name: OWASP Dependency Check Report
+          path: ${{ github.workspace }}/reports
