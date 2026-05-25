@@ -200,6 +200,7 @@ jobs:
           project: "yas"
           path: "."
           format: "HTML"
+          args: --noupdate
 
       - name: Upload OWASP Dependency Check Report
         uses: actions/upload-artifact@v4
