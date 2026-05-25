@@ -173,6 +173,7 @@ jobs:
   # Feature branches only need the test phase for fast feedback.
   # Build + OWASP scan (~10 min) is only needed before merge.
   # ─────────────────────────────────────────────
+  
   build:
     name: Build
     runs-on: ubuntu-latest
