@@ -201,8 +201,8 @@ jobs:
           project: "yas"
           path: "."
           format: "HTML"
-          out: reports
-          args: --noupdate --disableCentral
+          # out: reports
+          # args: --noupdate --disableCentral
 
       - name: Upload OWASP Dependency Check Report
         uses: actions/upload-artifact@v4
