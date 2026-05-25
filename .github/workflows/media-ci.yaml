@@ -81,6 +81,7 @@ jobs:
           path: media/target/site/jacoco
 
       - name: VerifyCoverage
+        if: github.event_name == 'pull_request'
         run: |
           set -euo pipefail
           python3 - <<'PY'
