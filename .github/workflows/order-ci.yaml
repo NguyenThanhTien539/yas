@@ -201,7 +201,8 @@ jobs:
           project: "yas"
           path: "."
           format: "HTML"
-          args: --noupdate
+          out: reports
+          args: --noupdate --disableCentral
 
 
       - name: Upload OWASP Dependency Check Report
