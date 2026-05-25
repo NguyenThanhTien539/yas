@@ -108,7 +108,7 @@ jobs:
         run: npm install -g snyk
 
       - name: Snyk Test & Monitor
-          continue-on-error: true
+        continue-on-error: true
         env:
           SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
         run: |
