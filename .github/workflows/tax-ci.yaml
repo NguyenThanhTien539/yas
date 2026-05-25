@@ -1,4 +1,4 @@
-name: tax service ci
+﻿name: tax service ci
 
 on:
   push:
@@ -37,7 +37,6 @@ jobs:
         uses: gitleaks/gitleaks-action@v2
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        continue-on-error: true # Don't fail build on leak detection; just report
 
       # -am builds all dependencies before verifying the tax module
       - name: Run Maven Verify (test + coverage)
@@ -45,7 +44,11 @@ jobs:
 
       # Checkstyle requires reactor context for CI-friendly versioning
       - name: Run Maven Checkstyle
-        run: mvn checkstyle:checkstyle -pl tax -am -Dcheckstyle.output.file=tax-checkstyle-result.xml
+        run: |
+          mvn -B compile checkstyle:check \
+            -pl tax -am \
+            -DskipTests -DskipITs \
+            -Dcheckstyle.output.file=tax-checkstyle-result.xml
 
       - name: Upload Checkstyle Result
         uses: jwgmeligmeyling/checkstyle-github-action@master
@@ -97,7 +100,7 @@ jobs:
           pct=covered/(missed+covered)*100 if (missed+covered)>0 else 0.0
           print(f'Overall LINE coverage: {pct:.2f}%')
           if pct < 70.0:
-            print(f'ERROR: coverage {pct:.2f}% < 70%'); sys.exit(1)
+            print(f'ERROR: coverage {pct:.2f}% < 70.00%'); sys.exit(1)
           PY
 
       # Scan for HIGH+ CVEs in the dependency tree.
@@ -106,33 +109,32 @@ jobs:
       - name: Install Snyk CLI
         run: npm install -g snyk
 
-      - name: Snyk test
+      - name: Snyk Test & Monitor
         continue-on-error: true
         env:
           SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
         run: |
           find . -name "mvnw" -exec chmod +x {} \;
 
-          # Inject -Drevision via .mvn/maven.config so both Maven layers (outer CLI + inner
-          # snyk-linux binary) pick it up without needing extra env vars or --maven-args.
           mkdir -p .mvn
           echo "-Drevision=1.0-SNAPSHOT" > .mvn/maven.config
-
-          # Install root POM + common-library so Snyk can resolve artifact coordinates.
           mvn install -pl common-library -am -DskipTests -q
 
-          # Replace ${revision} literals in installed POMs.
-          # Maven's artifact descriptor reader does not apply system properties to POMs
-          # read from ~/.m2, causing resolution failures on Central.
           find ~/.m2/repository/com/yas -name "*.pom" \
             -exec sed -i 's/\${revision}/1.0-SNAPSHOT/g' {} \;
 
           snyk auth $SNYK_TOKEN
+
           snyk test --file=tax/pom.xml \
             --project-name=yas-tax \
             --severity-threshold=high \
             --json-file-output=snyk-report.json \
             --debug || true
+
+          snyk monitor --file=tax/pom.xml \
+            --org=136ead40-5311-48b6-a6ba-cf93c14ee4fd \
+            --project-name=yas-tax-service \
+            --target-name=NguyenThanhTien539/yas
 
           if [ -f snyk-report.json ]; then
             echo "snyk-report.json created successfully"
@@ -203,5 +205,3 @@ jobs:
         with:
           name: OWASP Dependency Check Report
           path: ${{ github.workspace }}/reports
-
-

@@ -22,3 +22,8 @@ paths = [
   '''keycloak-yas-realm-import.yaml''',
   '''target'''
 ]
+[[allowlist]]
+description = "Allow sonar project key"
+regexes = [
+  '''sonar\.projectKey'''
+]
