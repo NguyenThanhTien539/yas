@@ -15,7 +15,8 @@ on:
       - ".github/workflows/actions/action.yaml"
       - ".github/workflows/media-ci.yaml"
       - "pom.xml"
-  workflow_dispatch:
+
+  workflow_dispatch: # Cho phép trigger thủ công từ tab Actions trên GitHub
 
 jobs:
   # ─────────────────────────────────────────────
@@ -73,7 +74,7 @@ jobs:
           paths: ${{ github.workspace }}/media/target/site/jacoco/jacoco.xml
           token: ${{ secrets.GITHUB_TOKEN }}
           min-coverage-overall: 70
-          title: "media Coverage Report"
+          title: "Media Coverage Report"
           update-comment: true
 
       - name: Upload Coverage Artifact
@@ -100,7 +101,7 @@ jobs:
           pct=covered/(missed+covered)*100 if (missed+covered)>0 else 0.0
           print(f'Overall LINE coverage: {pct:.2f}%')
           if pct < 70.0:
-            print(f'ERROR: coverage {pct:.2f}% < 70.00%'); sys.exit(1)
+            print(f'ERROR: coverage {pct:.2f}% < 70%'); sys.exit(1)
           PY
 
       # Scan for HIGH+ CVEs in the dependency tree.
@@ -199,6 +200,8 @@ jobs:
           project: "yas"
           path: "."
           format: "HTML"
+          # out: reports
+          # args: --noupdate --disableCentral
 
       - name: Upload OWASP Dependency Check Report
         uses: actions/upload-artifact@v4

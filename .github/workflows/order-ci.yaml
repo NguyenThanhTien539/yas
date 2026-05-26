@@ -15,6 +15,7 @@ on:
       - ".github/workflows/actions/action.yaml"
       - ".github/workflows/order-ci.yaml"
       - "pom.xml"
+
   workflow_dispatch:
 
 jobs:
@@ -31,6 +32,7 @@ jobs:
           fetch-depth: 0 # Required for SonarCloud blame history and Gitleaks full log scan
 
       - uses: ./.github/workflows/actions # Setup JDK 21, cache Maven & Sonar
+
 
       # Scan for secrets leaked in commit history
       - name: Gitleaks – Scan for leaked secrets
@@ -199,6 +201,8 @@ jobs:
           project: "yas"
           path: "."
           format: "HTML"
+          # out: reports
+          # args: --noupdate --disableCentral
 
       - name: Upload OWASP Dependency Check Report
         uses: actions/upload-artifact@v4
