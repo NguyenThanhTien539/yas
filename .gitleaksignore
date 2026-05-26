@@ -15,3 +15,4 @@ automation-ui/backoffice/src/test/java/com/yas/automation/ui/steps/LoginSteps.ja
 automation-ui/storefront/src/test/java/com/yas/automation/ui/steps/LoginSteps.java:hashicorp-tf-password:78
 .github/workflows/cart-ci.yaml:generic-api-key:162
 .github/workflows/search-ci.yaml:generic-api-key:162
+# 729f1ec0d5255170c8826729ef640b0f723b2ef9:.github/workflows/customer-ci.yaml:generic-api-key:190
