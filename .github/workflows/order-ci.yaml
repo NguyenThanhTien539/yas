@@ -105,6 +105,7 @@ jobs:
             print(f'ERROR: coverage {pct:.2f}% < 70.00%'); sys.exit(1)
           PY
 
+
       # Scan for HIGH+ CVEs in the dependency tree.
       # Uses order/pom.xml to resolve the correct dependency tree in this monorepo.
       # continue-on-error: results are advisory, not blocking.
